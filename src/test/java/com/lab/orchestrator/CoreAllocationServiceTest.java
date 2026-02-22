@@ -57,4 +57,96 @@ class CoreAllocationServiceTest {
         CoreAllocation afterRelease = coreAllocationRepository.findByCoreNumber(allocated.getCoreNumber()).orElseThrow();
         Assertions.assertEquals(0, afterRelease.getCurrentStudentCount());
     }
+
+    // Test for spreading the load evenly across the cores
+    @Test
+    void testLeastCongestedCoreMaxDifferenceOne() {
+        coreAllocationService.initializeCores(12, List.of(0, 1, 2));
+
+        for (int i = 0; i < 5; i++) {
+            coreAllocationService.getNextAvailableCore();
+        }
+
+        List<CoreAllocation> cores = coreAllocationRepository.findAll();
+        Assertions.assertEquals(3, cores.size());
+        int min = cores.stream().mapToInt(CoreAllocation::getCurrentStudentCount).min().orElseThrow();
+        int max = cores.stream().mapToInt(CoreAllocation::getCurrentStudentCount).max().orElseThrow();
+        Assertions.assertTrue(max - min <= 1,
+                "Least Congested Core Algorithm should keep max difference between cores at most 1, got min=" + min + " max=" + max);
+    }
+
+    @Test
+    void testGetNextAvailableCoreThrowsWhenNoCoresInitialized() {
+        Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
+    }
+
+    // Test for failing when at capacity
+    @Test
+    void testAllocationFailsWhenAtCapacity() {
+        coreAllocationService.initializeCores(30, List.of(0, 1, 2));
+
+        for (int i = 0; i < 30; i++) {
+            coreAllocationService.getNextAvailableCore();
+        }
+
+        Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
+    }
+
+    @Test
+    // Test for initializing cores and students and checking that no allocations have been made yet
+    void testCoresAndStudentsInitializedNoAllocationsYet() {
+        coreAllocationService.initializeCores(12, List.of(0, 1, 2));
+
+        List<CoreAllocation> cores = coreAllocationRepository.findAll();
+        Assertions.assertEquals(3, cores.size());
+        for (CoreAllocation core : cores) {
+            Assertions.assertEquals(0, core.getCurrentStudentCount());
+        }
+    }
+
+    @Test
+    void testGetNextAvailableCoreThrowsWhenCoresNotInitialized() {
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> coreAllocationService.initializeCores(10, List.of()));
+    }
+
+    @Test
+    void testInitializeCoresThrowsWhenStudentsNotInitialized() {
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> coreAllocationService.initializeCores(0, List.of(0, 1)));
+    }
+
+    @Test
+    void testGetNextAvailableCoreThrowsWhenBothNotInitialized() {
+        Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
+    }
+
+    @Test
+    void testBothInitializedEverythingWorks() {
+        coreAllocationService.initializeCores(10, List.of(0, 1, 2));
+
+        CoreAllocation allocated = coreAllocationService.getNextAvailableCore();
+        Assertions.assertEquals(1, allocated.getCurrentStudentCount());
+
+        List<CoreAllocation> cores = coreAllocationRepository.findAll();
+        long totalAllocated = cores.stream().mapToInt(CoreAllocation::getCurrentStudentCount).sum();
+        Assertions.assertEquals(1, totalAllocated);
+    }
+
+    @Test
+    void testWorstCaseCpuLimitCalculation() {
+        coreAllocationService.initializeCores(10, List.of(0, 1, 2));
+
+        List<CoreAllocation> cores = coreAllocationRepository.findAll();
+        Assertions.assertEquals(3, cores.size());
+        for (CoreAllocation core : cores) {
+            Assertions.assertEquals(0.25, core.getCpuLimit(), 1e-9);
+        }
+
+        for (int i = 0; i < 12; i++) {
+            coreAllocationService.getNextAvailableCore();
+        }
+
+        Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
+    }
 }

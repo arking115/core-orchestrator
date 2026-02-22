@@ -17,13 +17,19 @@ public class CoreAllocationService {
 
     @Transactional
     public void initializeCores(int totalStudents, List<Integer> coreNumbers) {
+        if (totalStudents <= 0) {
+            throw new IllegalArgumentException("totalStudents must be positive and non-zero.");
+        }
         coreAllocationRepository.deleteAll();
 
-        if (coreNumbers.isEmpty()) {
-            return;
+        if (coreNumbers == null || coreNumbers.isEmpty()) {
+            throw new IllegalArgumentException("At least one core must be provided for allocation.");
         }
 
-        double cpuLimit = 1.0 / ((double) totalStudents / coreNumbers.size());
+        // Pessimistic resource allocation, calculation of the limit based on the worst case core.
+        int maxStudentsPerCore = (int) Math.ceil((double) totalStudents / coreNumbers.size());
+
+        double cpuLimit = 1.0 / maxStudentsPerCore;
 
         for (Integer coreNumber : coreNumbers) {
             CoreAllocation allocation = new CoreAllocation();
@@ -39,6 +45,15 @@ public class CoreAllocationService {
         List<CoreAllocation> cores = coreAllocationRepository.findAllByOrderByCurrentStudentCountAsc();
         if (cores.isEmpty()) {
             throw new IllegalStateException("No cores available. Call initializeCores first.");
+        }
+        int currentTotal = cores.stream()
+                .mapToInt(CoreAllocation::getCurrentStudentCount)
+                .sum();
+        double cpuLimit = cores.get(0).getCpuLimit();
+        // reverse math to find the max total number of students that can be allocated
+        int maxTotal = (int) Math.round(cores.size() / cpuLimit);
+        if (currentTotal + 1 > maxTotal) {
+            throw new IllegalStateException("At capacity: cannot allocate more students.");
         }
         CoreAllocation emptiest = cores.get(0);
         emptiest.setCurrentStudentCount(emptiest.getCurrentStudentCount() + 1);
