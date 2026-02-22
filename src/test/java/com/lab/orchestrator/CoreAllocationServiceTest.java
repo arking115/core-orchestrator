@@ -2,6 +2,7 @@ package com.lab.orchestrator;
 
 import com.lab.orchestrator.model.CoreAllocation;
 import com.lab.orchestrator.repository.CoreAllocationRepository;
+import com.lab.orchestrator.repository.LabConfigRepository;
 import com.lab.orchestrator.service.CoreAllocationService;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
@@ -19,6 +20,9 @@ class CoreAllocationServiceTest {
 
     @Autowired
     private CoreAllocationRepository coreAllocationRepository;
+
+    @Autowired
+    private LabConfigRepository labConfigRepository;
 
     @Test
     void testEvenDistribution() {
@@ -121,6 +125,15 @@ class CoreAllocationServiceTest {
         Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
     }
 
+    // Test for failing when lab config is missing for any reason 
+    @Test
+    void testGetNextAvailableCoreThrowsWhenLabConfigMissing() {
+        coreAllocationService.initializeCores(10, List.of(0, 1, 2));
+        labConfigRepository.deleteAll();
+
+        Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
+    }
+
     @Test
     void testBothInitializedEverythingWorks() {
         coreAllocationService.initializeCores(10, List.of(0, 1, 2));
@@ -134,7 +147,7 @@ class CoreAllocationServiceTest {
     }
 
     @Test
-    void testWorstCaseCpuLimitCalculation() {
+    void testWorstCaseCpuLimitCalculationAtLimitSucceeds() {
         coreAllocationService.initializeCores(10, List.of(0, 1, 2));
 
         List<CoreAllocation> cores = coreAllocationRepository.findAll();
@@ -143,7 +156,20 @@ class CoreAllocationServiceTest {
             Assertions.assertEquals(0.25, core.getCpuLimit(), 1e-9);
         }
 
-        for (int i = 0; i < 12; i++) {
+        for (int i = 0; i < 10; i++) {
+            coreAllocationService.getNextAvailableCore();
+        }
+
+        List<CoreAllocation> afterAllocations = coreAllocationRepository.findAll();
+        int totalAllocated = afterAllocations.stream().mapToInt(CoreAllocation::getCurrentStudentCount).sum();
+        Assertions.assertEquals(10, totalAllocated);
+    }
+
+    @Test
+    void testWorstCaseCpuLimitCalculationFailsWhenPastLimit() {
+        coreAllocationService.initializeCores(10, List.of(0, 1, 2));
+
+        for (int i = 0; i < 10; i++) {
             coreAllocationService.getNextAvailableCore();
         }
 

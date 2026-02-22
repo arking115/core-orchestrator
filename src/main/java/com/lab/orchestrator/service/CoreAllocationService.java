@@ -1,7 +1,9 @@
 package com.lab.orchestrator.service;
 
 import com.lab.orchestrator.model.CoreAllocation;
+import com.lab.orchestrator.model.LabConfig;
 import com.lab.orchestrator.repository.CoreAllocationRepository;
+import com.lab.orchestrator.repository.LabConfigRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,9 +12,12 @@ import org.springframework.transaction.annotation.Transactional;
 public class CoreAllocationService {
 
     private final CoreAllocationRepository coreAllocationRepository;
+    private final LabConfigRepository labConfigRepository;
 
-    public CoreAllocationService(CoreAllocationRepository coreAllocationRepository) {
+    public CoreAllocationService(CoreAllocationRepository coreAllocationRepository,
+                                 LabConfigRepository labConfigRepository) {
         this.coreAllocationRepository = coreAllocationRepository;
+        this.labConfigRepository = labConfigRepository;
     }
 
     @Transactional
@@ -20,11 +25,17 @@ public class CoreAllocationService {
         if (totalStudents <= 0) {
             throw new IllegalArgumentException("totalStudents must be positive and non-zero.");
         }
-        coreAllocationRepository.deleteAll();
-
         if (coreNumbers == null || coreNumbers.isEmpty()) {
             throw new IllegalArgumentException("At least one core must be provided for allocation.");
-        }
+        }  
+
+        coreAllocationRepository.deleteAll();
+        labConfigRepository.deleteAll();
+
+        LabConfig config = new LabConfig();
+        config.setId(1L);
+        config.setMaxStudents(totalStudents);
+        labConfigRepository.save(config);
 
         // Pessimistic resource allocation, calculation of the limit based on the worst case core.
         int maxStudentsPerCore = (int) Math.ceil((double) totalStudents / coreNumbers.size());
@@ -46,13 +57,11 @@ public class CoreAllocationService {
         if (cores.isEmpty()) {
             throw new IllegalStateException("No cores available. Call initializeCores first.");
         }
-        int currentTotal = cores.stream()
-                .mapToInt(CoreAllocation::getCurrentStudentCount)
-                .sum();
-        double cpuLimit = cores.get(0).getCpuLimit();
-        // reverse math to find the max total number of students that can be allocated
-        int maxTotal = (int) Math.round(cores.size() / cpuLimit);
-        if (currentTotal + 1 > maxTotal) {
+        LabConfig config = labConfigRepository.findById(1L)
+                .orElseThrow(() -> new IllegalStateException("No lab config. Call initializeCores first."));
+        Integer total = coreAllocationRepository.getTotalStudentCount();
+        int currentTotal = total != null ? total : 0;
+        if (currentTotal + 1 > config.getMaxStudents()) {
             throw new IllegalStateException("At capacity: cannot allocate more students.");
         }
         CoreAllocation emptiest = cores.get(0);
