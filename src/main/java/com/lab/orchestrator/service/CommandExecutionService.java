@@ -25,6 +25,10 @@ public class CommandExecutionService {
     private String keyPath;
 
     public String executeCommand(String command) {
+        if (command == null || command.isBlank()) {
+            throw new IllegalArgumentException("Command must not be null or blank");
+        }
+
         List<String> sshCommand = List.of(
                 "ssh",
                 "-i", keyPath,
