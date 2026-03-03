@@ -1,5 +1,7 @@
 package com.lab.orchestrator.service;
 
+import com.lab.orchestrator.model.LabConfig;
+import com.lab.orchestrator.repository.LabConfigRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,25 +13,29 @@ import org.springframework.stereotype.Service;
 public class DockerService {
 
     private final CommandExecutionService commandExecutionService;
+    private final LabConfigRepository labConfigRepository;
 
     @Value("${storage.base-path}")
     private String basePath;
 
-    public void startContainer(String studentId, int coreNumber, double cpuLimit) {
+    public void startContainer(String studentId, int coreNumber, double cpuLimit, int assignedPort) {
         ensureStudentDirectory(studentId);
 
-        String containerName = studentId;
-        String studentVolumePath = String.format("%s/%s", basePath, studentId);
+        LabConfig config = labConfigRepository.findById(1L).orElse(null);
+        String imageName = (config != null && config.getImageName() != null && !config.getImageName().isBlank())
+                ? config.getImageName()
+                : "ubuntu-rt-base";
+
+        String volumeMapping = String.format("%s/%s:/home/student", basePath, studentId)
+
+        String portMapping = String.format("%d:22", assignedPort);
 
         String command = String.format(
-                "docker run -d --name %s --cpuset-cpus=\"%d\" --cpus=\"%s\" -v %s:/home/student/work your-image-name",
-                containerName,
-                coreNumber,
-                cpuLimit,
-                studentVolumePath
+            "docker run -d --name %s --cpus=\"%s\" -p %s -v %s %s",
+            studentId, cpuLimit, portMapping, volumeMapping, imageName
         );
 
-        log.info("Starting Docker container for student {} on core {} with CPU limit {}", studentId, coreNumber, cpuLimit);
+        log.info("Starting Docker container for student {} with command: {}", studentId, command);
         commandExecutionService.executeCommand(command);
     }
 

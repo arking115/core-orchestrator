@@ -18,6 +18,9 @@ public class LabConfig {
     @Column(name = "max_students", nullable = false)
     private Integer maxStudents;
 
+    @Column(name = "image_name")
+    private String imageName;
+
     public LabConfig() {
     }
 
@@ -35,5 +38,13 @@ public class LabConfig {
 
     public void setMaxStudents(Integer maxStudents) {
         this.maxStudents = maxStudents;
+    }
+
+    public String getImageName() {
+        return imageName;
+    }
+
+    public void setImageName(String imageName) {
+        this.imageName = imageName;
     }
 }
