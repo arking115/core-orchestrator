@@ -19,6 +19,7 @@ public class DockerService {
     private String basePath;
 
     public void startContainer(String studentId, int coreNumber, double cpuLimit, int assignedPort) {
+        validateStartContainerInputs(studentId, coreNumber, cpuLimit, assignedPort);
         ensureStudentDirectory(studentId);
 
         LabConfig config = labConfigRepository.findById(1L).orElse(null);
@@ -26,13 +27,13 @@ public class DockerService {
                 ? config.getImageName()
                 : "ubuntu-rt-base";
 
-        String volumeMapping = String.format("%s/%s:/home/student", basePath, studentId)
+        String volumeMapping = String.format("%s/%s:/home/student", basePath, studentId);
 
         String portMapping = String.format("%d:22", assignedPort);
 
         String command = String.format(
-            "docker run -d --name %s --cpus=\"%s\" -p %s -v %s %s",
-            studentId, cpuLimit, portMapping, volumeMapping, imageName
+                "docker run -d --name %s --cpuset-cpus=\"%d\" --cpus=\"%s\" -p %s -v %s --cap-add=SYS_NICE --privileged %s",
+                studentId, coreNumber, cpuLimit, portMapping, volumeMapping, imageName
         );
 
         log.info("Starting Docker container for student {} with command: {}", studentId, command);
@@ -56,6 +57,21 @@ public class DockerService {
 
         log.info("Ensuring directory exists for student {}: {}", studentId, studentDirectory);
         commandExecutionService.executeCommand(mkdirCommand);
+    }
+
+    private static void validateStartContainerInputs(String studentId, int coreNumber, double cpuLimit, int assignedPort) {
+        if (studentId == null || studentId.isBlank()) {
+            throw new IllegalArgumentException("studentId must not be null or blank");
+        }
+        if (coreNumber <= 0) {
+            throw new IllegalArgumentException("coreNumber must be > 0");
+        }
+        if (cpuLimit <= 0) {
+            throw new IllegalArgumentException("cpuLimit must be > 0");
+        }
+        if (assignedPort <= 0) {
+            throw new IllegalArgumentException("assignedPort must be > 0");
+        }
     }
 }
 
