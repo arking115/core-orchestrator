@@ -1,5 +1,6 @@
 package com.lab.orchestrator;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -7,6 +8,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 class OrchestratorApplicationTests {
 
     @Test
-    void contextLoads() {
+    @DisplayName("Spring Boot application context loads successfully")
+    void contextLoads_applicationContextStartsWithoutErrors() {
     }
 }

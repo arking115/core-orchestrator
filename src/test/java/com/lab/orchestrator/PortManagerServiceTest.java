@@ -24,6 +24,7 @@ class PortManagerServiceTest {
     private PortManagerService portManagerService;
 
     @Test
+    @DisplayName("When no ports are taken, the start port is returned")
     void getAvailablePort_noPortsTaken_returnsStartPort() {
         when(labSessionRepository.findAllAssignedPorts()).thenReturn(List.of());
 
@@ -33,6 +34,7 @@ class PortManagerServiceTest {
     }
 
     @Test
+    @DisplayName("When all ports in the range are taken, an exception is thrown")
     void getAvailablePort_allPortsTaken_throwsRuntimeException() {
         List<Integer> usedPorts = new ArrayList<>();
         for (int port = PortManagerService.START_PORT; port <= PortManagerService.MAX_PORT; port++) {

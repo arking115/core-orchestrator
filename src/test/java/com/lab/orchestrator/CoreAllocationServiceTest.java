@@ -6,6 +6,7 @@ import com.lab.orchestrator.repository.LabConfigRepository;
 import com.lab.orchestrator.service.CoreAllocationService;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,8 +26,9 @@ class CoreAllocationServiceTest {
     private LabConfigRepository labConfigRepository;
 
     @Test
-    void testEvenDistribution() {
-        coreAllocationService.initializeCores(30, List.of(0, 1, 2));
+    @DisplayName("When many students are allocated, the load is evenly distributed across all cores")
+    void evenDistribution_multipleCores_spreadsLoadEvenly() {
+        coreAllocationService.initializeCores(30, List.of(1, 2, 3));
 
         for (int i = 0; i < 30; i++) {
             coreAllocationService.getNextAvailableCore();
@@ -40,8 +42,9 @@ class CoreAllocationServiceTest {
     }
 
     @Test
-    void testCpuLimitCalculation() {
-        coreAllocationService.initializeCores(10, List.of(0, 1));
+    @DisplayName("CPU limit per core is computed from total students and number of cores")
+    void cpuLimitCalculation_derivedFromStudentsAndCores() {
+        coreAllocationService.initializeCores(10, List.of(1, 2));
 
         List<CoreAllocation> cores = coreAllocationRepository.findAll();
         Assertions.assertEquals(2, cores.size());
@@ -51,8 +54,9 @@ class CoreAllocationServiceTest {
     }
 
     @Test
-    void testReleaseCore() {
-        coreAllocationService.initializeCores(1, List.of(0));
+    @DisplayName("Releasing a core decrements its student count back toward zero")
+    void releaseCore_decrementsCurrentStudentCount() {
+        coreAllocationService.initializeCores(1, List.of(1));
         CoreAllocation allocated = coreAllocationService.getNextAvailableCore();
         Assertions.assertEquals(1, allocated.getCurrentStudentCount());
 
@@ -64,8 +68,9 @@ class CoreAllocationServiceTest {
 
     // Test for spreading the load evenly across the cores
     @Test
-    void testLeastCongestedCoreMaxDifferenceOne() {
-        coreAllocationService.initializeCores(12, List.of(0, 1, 2));
+    @DisplayName("Least-congested-core algorithm keeps max difference between cores at most 1")
+    void leastCongestedCore_doesNotOverloadAnySingleCore() {
+        coreAllocationService.initializeCores(12, List.of(1, 2, 3));
 
         for (int i = 0; i < 5; i++) {
             coreAllocationService.getNextAvailableCore();
@@ -80,14 +85,16 @@ class CoreAllocationServiceTest {
     }
 
     @Test
-    void testGetNextAvailableCoreThrowsWhenNoCoresInitialized() {
+    @DisplayName("getNextAvailableCore throws when no cores have been initialized")
+    void getNextAvailableCore_noCoresInitialized_throwsIllegalStateException() {
         Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
     }
 
     // Test for failing when at capacity
     @Test
-    void testAllocationFailsWhenAtCapacity() {
-        coreAllocationService.initializeCores(30, List.of(0, 1, 2));
+    @DisplayName("Allocations past configured capacity fail with an exception")
+    void allocation_atCapacity_throwsIllegalStateException() {
+        coreAllocationService.initializeCores(30, List.of(1, 2, 3));
 
         for (int i = 0; i < 30; i++) {
             coreAllocationService.getNextAvailableCore();
@@ -98,8 +105,9 @@ class CoreAllocationServiceTest {
 
     @Test
     // Test for initializing cores and students and checking that no allocations have been made yet
-    void testCoresAndStudentsInitializedNoAllocationsYet() {
-        coreAllocationService.initializeCores(12, List.of(0, 1, 2));
+    @DisplayName("After initialization, cores exist but have zero allocations")
+    void initializeCores_createsCoresWithZeroStudents() {
+        coreAllocationService.initializeCores(12, List.of(1, 2, 3));
 
         List<CoreAllocation> cores = coreAllocationRepository.findAll();
         Assertions.assertEquals(3, cores.size());
@@ -109,34 +117,39 @@ class CoreAllocationServiceTest {
     }
 
     @Test
-    void testGetNextAvailableCoreThrowsWhenCoresNotInitialized() {
+    @DisplayName("initializeCores rejects an empty core list")
+    void initializeCores_emptyCoreList_throwsIllegalArgumentException() {
         Assertions.assertThrows(IllegalArgumentException.class,
                 () -> coreAllocationService.initializeCores(10, List.of()));
     }
 
     @Test
-    void testInitializeCoresThrowsWhenStudentsNotInitialized() {
+    @DisplayName("initializeCores rejects a non-positive totalStudents value")
+    void initializeCores_zeroStudents_throwsIllegalArgumentException() {
         Assertions.assertThrows(IllegalArgumentException.class,
-                () -> coreAllocationService.initializeCores(0, List.of(0, 1)));
+                () -> coreAllocationService.initializeCores(0, List.of(1, 2)));
     }
 
     @Test
-    void testGetNextAvailableCoreThrowsWhenBothNotInitialized() {
+    @DisplayName("getNextAvailableCore throws when both cores and lab config are missing")
+    void getNextAvailableCore_coresAndConfigMissing_throwsIllegalStateException() {
         Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
     }
 
     // Test for failing when lab config is missing for any reason 
     @Test
-    void testGetNextAvailableCoreThrowsWhenLabConfigMissing() {
-        coreAllocationService.initializeCores(10, List.of(0, 1, 2));
+    @DisplayName("getNextAvailableCore throws when LabConfig has been deleted")
+    void getNextAvailableCore_labConfigMissing_throwsIllegalStateException() {
+        coreAllocationService.initializeCores(10, List.of(1, 2, 3));
         labConfigRepository.deleteAll();
 
         Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
     }
 
     @Test
-    void testBothInitializedEverythingWorks() {
-        coreAllocationService.initializeCores(10, List.of(0, 1, 2));
+    @DisplayName("With cores and config initialized, a single allocation succeeds and is tracked correctly")
+    void initializeAndAllocate_once_incrementsTotalAllocatedStudents() {
+        coreAllocationService.initializeCores(10, List.of(1, 2, 3));
 
         CoreAllocation allocated = coreAllocationService.getNextAvailableCore();
         Assertions.assertEquals(1, allocated.getCurrentStudentCount());
@@ -147,8 +160,9 @@ class CoreAllocationServiceTest {
     }
 
     @Test
-    void testWorstCaseCpuLimitCalculationAtLimitSucceeds() {
-        coreAllocationService.initializeCores(10, List.of(0, 1, 2));
+    @DisplayName("Worst-case CPU limit still allows allocations up to the configured student maximum")
+    void worstCaseCpuLimit_atLimit_allAllocationsSucceed() {
+        coreAllocationService.initializeCores(10, List.of(1, 2, 3));
 
         List<CoreAllocation> cores = coreAllocationRepository.findAll();
         Assertions.assertEquals(3, cores.size());
@@ -166,13 +180,23 @@ class CoreAllocationServiceTest {
     }
 
     @Test
-    void testWorstCaseCpuLimitCalculationFailsWhenPastLimit() {
-        coreAllocationService.initializeCores(10, List.of(0, 1, 2));
+    @DisplayName("Allocations beyond the worst-case CPU limit fail with an exception")
+    void worstCaseCpuLimit_beyondLimit_allocationFails() {
+        coreAllocationService.initializeCores(10, List.of(1, 2, 3));
 
         for (int i = 0; i < 10; i++) {
             coreAllocationService.getNextAvailableCore();
         }
 
         Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
+    }
+
+    @Test
+    @DisplayName("initializeCores rejects core 0 and negative core numbers")
+    void initializeCores_coreZeroOrNegative_throwsIllegalArgumentException() {
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> coreAllocationService.initializeCores(10, List.of(0, 1, 2)));
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> coreAllocationService.initializeCores(10, List.of(-1, 1, 2)));
     }
 }

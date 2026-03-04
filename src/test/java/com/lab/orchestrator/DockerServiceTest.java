@@ -60,6 +60,27 @@ class DockerServiceTest {
     }
 
     @Test
+    @DisplayName("When no LabConfig exists, startContainer falls back to default ubuntu-rt-base image")
+    void startContainer_noConfig_usesDefaultImage() {
+        ReflectionTestUtils.setField(dockerService, "basePath", "/opt/lab-data");
+
+        when(labConfigRepository.findById(1L)).thenReturn(Optional.empty());
+        when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/student1"))).thenReturn("ok");
+        when(commandExecutionService.executeCommand(eq(
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
+        ))).thenReturn("container-id");
+
+        dockerService.startContainer("student1", 2, 1.5, 2222);
+
+        InOrder inOrder = inOrder(commandExecutionService, labConfigRepository);
+        inOrder.verify(commandExecutionService).executeCommand("mkdir -p /opt/lab-data/student1");
+        inOrder.verify(labConfigRepository).findById(1L);
+        inOrder.verify(commandExecutionService).executeCommand(
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
+        );
+    }
+
+    @Test
     @DisplayName("If remote server is down (SSH fails), the exception is propagated and docker run is not attempted")
     void startContainer_remoteServerDown_throws_andDoesNotRunDocker() {
         ReflectionTestUtils.setField(dockerService, "basePath", "/opt/lab-data");
@@ -92,6 +113,32 @@ class DockerServiceTest {
         inOrder.verify(commandExecutionService).executeCommand(
                 "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
         );
+    }
+
+    @Test
+    @DisplayName("stopContainer calls docker stop before docker rm for the same student")
+    void stopContainer_callsStopBeforeRemove_inOrder() {
+        String studentId = "student1";
+
+        dockerService.stopContainer(studentId);
+
+        InOrder inOrder = inOrder(commandExecutionService);
+        inOrder.verify(commandExecutionService).executeCommand("docker stop student1 || true");
+        inOrder.verify(commandExecutionService).executeCommand("docker rm student1 || true");
+    }
+
+    @Test
+    @DisplayName("If remote server is down during stop (SSH fails), the exception is propagated and docker rm is not attempted")
+    void stopContainer_remoteServerDown_throws_andDoesNotRemoveContainer() {
+        String studentId = "student1";
+
+        when(commandExecutionService.executeCommand("docker stop student1 || true"))
+                .thenThrow(new RuntimeException("Failed to execute SSH command during stop"));
+
+        assertThrows(RuntimeException.class, () -> dockerService.stopContainer(studentId));
+
+        verify(commandExecutionService).executeCommand("docker stop student1 || true");
+        verify(commandExecutionService, never()).executeCommand("docker rm student1 || true");
     }
 
     @ParameterizedTest(name = "invalid args: studentId={0}, core={1}, cpu={2}, port={3}")

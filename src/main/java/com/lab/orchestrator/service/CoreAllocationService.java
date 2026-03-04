@@ -27,7 +27,12 @@ public class CoreAllocationService {
         }
         if (coreNumbers == null || coreNumbers.isEmpty()) {
             throw new IllegalArgumentException("At least one core must be provided for allocation.");
-        }  
+        }
+        boolean hasInvalidCore = coreNumbers.stream()
+                .anyMatch(core -> core == null || core <= 0);
+        if (hasInvalidCore) {
+            throw new IllegalArgumentException("All core numbers must be positive and non-zero (Core 0 is reserved).");
+        }
 
         coreAllocationRepository.deleteAll();
         labConfigRepository.deleteAll();
