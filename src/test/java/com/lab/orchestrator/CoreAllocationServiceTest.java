@@ -28,7 +28,7 @@ class CoreAllocationServiceTest {
     @Test
     @DisplayName("When many students are allocated, the load is evenly distributed across all cores")
     void evenDistribution_multipleCores_spreadsLoadEvenly() {
-        coreAllocationService.initializeCores(30, List.of(1, 2, 3));
+        coreAllocationService.initializeCores(30, List.of(1, 2, 3), "test-image");
 
         for (int i = 0; i < 30; i++) {
             coreAllocationService.getNextAvailableCore();
@@ -44,7 +44,7 @@ class CoreAllocationServiceTest {
     @Test
     @DisplayName("CPU limit per core is computed from total students and number of cores")
     void cpuLimitCalculation_derivedFromStudentsAndCores() {
-        coreAllocationService.initializeCores(10, List.of(1, 2));
+        coreAllocationService.initializeCores(10, List.of(1, 2), "test-image");
 
         List<CoreAllocation> cores = coreAllocationRepository.findAll();
         Assertions.assertEquals(2, cores.size());
@@ -56,7 +56,7 @@ class CoreAllocationServiceTest {
     @Test
     @DisplayName("Releasing a core decrements its student count back toward zero")
     void releaseCore_decrementsCurrentStudentCount() {
-        coreAllocationService.initializeCores(1, List.of(1));
+        coreAllocationService.initializeCores(1, List.of(1), "test-image");
         CoreAllocation allocated = coreAllocationService.getNextAvailableCore();
         Assertions.assertEquals(1, allocated.getCurrentStudentCount());
 
@@ -70,7 +70,7 @@ class CoreAllocationServiceTest {
     @Test
     @DisplayName("Least-congested-core algorithm keeps max difference between cores at most 1")
     void leastCongestedCore_doesNotOverloadAnySingleCore() {
-        coreAllocationService.initializeCores(12, List.of(1, 2, 3));
+        coreAllocationService.initializeCores(12, List.of(1, 2, 3), "test-image");
 
         for (int i = 0; i < 5; i++) {
             coreAllocationService.getNextAvailableCore();
@@ -94,7 +94,7 @@ class CoreAllocationServiceTest {
     @Test
     @DisplayName("Allocations past configured capacity fail with an exception")
     void allocation_atCapacity_throwsIllegalStateException() {
-        coreAllocationService.initializeCores(30, List.of(1, 2, 3));
+        coreAllocationService.initializeCores(30, List.of(1, 2, 3), "test-image");
 
         for (int i = 0; i < 30; i++) {
             coreAllocationService.getNextAvailableCore();
@@ -107,7 +107,7 @@ class CoreAllocationServiceTest {
     // Test for initializing cores and students and checking that no allocations have been made yet
     @DisplayName("After initialization, cores exist but have zero allocations")
     void initializeCores_createsCoresWithZeroStudents() {
-        coreAllocationService.initializeCores(12, List.of(1, 2, 3));
+        coreAllocationService.initializeCores(12, List.of(1, 2, 3), "test-image");
 
         List<CoreAllocation> cores = coreAllocationRepository.findAll();
         Assertions.assertEquals(3, cores.size());
@@ -120,14 +120,14 @@ class CoreAllocationServiceTest {
     @DisplayName("initializeCores rejects an empty core list")
     void initializeCores_emptyCoreList_throwsIllegalArgumentException() {
         Assertions.assertThrows(IllegalArgumentException.class,
-                () -> coreAllocationService.initializeCores(10, List.of()));
+                () -> coreAllocationService.initializeCores(10, List.of(), "test-image"));
     }
 
     @Test
     @DisplayName("initializeCores rejects a non-positive totalStudents value")
     void initializeCores_zeroStudents_throwsIllegalArgumentException() {
         Assertions.assertThrows(IllegalArgumentException.class,
-                () -> coreAllocationService.initializeCores(0, List.of(1, 2)));
+                () -> coreAllocationService.initializeCores(0, List.of(1, 2), "test-image"));
     }
 
     @Test
@@ -140,7 +140,7 @@ class CoreAllocationServiceTest {
     @Test
     @DisplayName("getNextAvailableCore throws when LabConfig has been deleted")
     void getNextAvailableCore_labConfigMissing_throwsIllegalStateException() {
-        coreAllocationService.initializeCores(10, List.of(1, 2, 3));
+        coreAllocationService.initializeCores(10, List.of(1, 2, 3), "test-image");
         labConfigRepository.deleteAll();
 
         Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
@@ -149,7 +149,7 @@ class CoreAllocationServiceTest {
     @Test
     @DisplayName("With cores and config initialized, a single allocation succeeds and is tracked correctly")
     void initializeAndAllocate_once_incrementsTotalAllocatedStudents() {
-        coreAllocationService.initializeCores(10, List.of(1, 2, 3));
+        coreAllocationService.initializeCores(10, List.of(1, 2, 3), "test-image");
 
         CoreAllocation allocated = coreAllocationService.getNextAvailableCore();
         Assertions.assertEquals(1, allocated.getCurrentStudentCount());
@@ -162,7 +162,7 @@ class CoreAllocationServiceTest {
     @Test
     @DisplayName("Worst-case CPU limit still allows allocations up to the configured student maximum")
     void worstCaseCpuLimit_atLimit_allAllocationsSucceed() {
-        coreAllocationService.initializeCores(10, List.of(1, 2, 3));
+        coreAllocationService.initializeCores(10, List.of(1, 2, 3), "test-image");
 
         List<CoreAllocation> cores = coreAllocationRepository.findAll();
         Assertions.assertEquals(3, cores.size());
@@ -182,7 +182,7 @@ class CoreAllocationServiceTest {
     @Test
     @DisplayName("Allocations beyond the worst-case CPU limit fail with an exception")
     void worstCaseCpuLimit_beyondLimit_allocationFails() {
-        coreAllocationService.initializeCores(10, List.of(1, 2, 3));
+        coreAllocationService.initializeCores(10, List.of(1, 2, 3), "test-image");
 
         for (int i = 0; i < 10; i++) {
             coreAllocationService.getNextAvailableCore();
@@ -195,8 +195,8 @@ class CoreAllocationServiceTest {
     @DisplayName("initializeCores rejects core 0 and negative core numbers")
     void initializeCores_coreZeroOrNegative_throwsIllegalArgumentException() {
         Assertions.assertThrows(IllegalArgumentException.class,
-                () -> coreAllocationService.initializeCores(10, List.of(0, 1, 2)));
+                () -> coreAllocationService.initializeCores(10, List.of(0, 1, 2), "test-image"));
         Assertions.assertThrows(IllegalArgumentException.class,
-                () -> coreAllocationService.initializeCores(10, List.of(-1, 1, 2)));
+                () -> coreAllocationService.initializeCores(10, List.of(-1, 1, 2), "test-image"));
     }
 }

@@ -21,7 +21,7 @@ public class CoreAllocationService {
     }
 
     @Transactional
-    public void initializeCores(int totalStudents, List<Integer> coreNumbers) {
+    public void initializeCores(int totalStudents, List<Integer> coreNumbers, String imageName) {
         if (totalStudents <= 0) {
             throw new IllegalArgumentException("totalStudents must be positive and non-zero.");
         }
@@ -40,6 +40,7 @@ public class CoreAllocationService {
         LabConfig config = new LabConfig();
         config.setId(1L);
         config.setMaxStudents(totalStudents);
+        config.setImageName(imageName);
         labConfigRepository.save(config);
 
         // Pessimistic resource allocation, calculation of the limit based on the worst case core.
