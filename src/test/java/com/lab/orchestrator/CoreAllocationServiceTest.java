@@ -1,6 +1,7 @@
 package com.lab.orchestrator;
 
 import com.lab.orchestrator.model.CoreAllocation;
+import com.lab.orchestrator.model.LabConfig;
 import com.lab.orchestrator.repository.CoreAllocationRepository;
 import com.lab.orchestrator.repository.LabConfigRepository;
 import com.lab.orchestrator.service.CoreAllocationService;
@@ -117,7 +118,16 @@ class CoreAllocationServiceTest {
     }
 
     @Test
-    @DisplayName("initializeCores rejects an empty core list")
+    @DisplayName("imageName passed to initializeCores is stored in LabConfig with ID 1L")
+    void testInitializeCoresSavesImageToConfig() {
+        String imageName = "teacher-specified-image:latest";
+        coreAllocationService.initializeCores(5, List.of(1, 2), imageName);
+
+        LabConfig config = labConfigRepository.findById(1L).orElseThrow();
+        Assertions.assertEquals(imageName, config.getImageName());
+    }
+
+    @Test
     void initializeCores_emptyCoreList_throwsIllegalArgumentException() {
         Assertions.assertThrows(IllegalArgumentException.class,
                 () -> coreAllocationService.initializeCores(10, List.of(), "test-image"));
@@ -189,6 +199,13 @@ class CoreAllocationServiceTest {
         }
 
         Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
+    }
+
+    @Test
+    @DisplayName("initializeCores rejects invalid core number (Core 0) with IllegalArgumentException")
+    void initializeCores_invalidCoreNumberZero_throwsIllegalArgumentException() {
+        Assertions.assertThrows(IllegalArgumentException.class,
+                () -> coreAllocationService.initializeCores(10, List.of(0), "test-image"));
     }
 
     @Test
