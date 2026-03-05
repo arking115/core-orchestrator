@@ -88,6 +88,8 @@ class CoreAllocationServiceTest {
     @Test
     @DisplayName("getNextAvailableCore throws when no cores have been initialized")
     void getNextAvailableCore_noCoresInitialized_throwsIllegalStateException() {
+        coreAllocationRepository.deleteAll();
+        labConfigRepository.deleteAll();
         Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
     }
 
@@ -143,6 +145,8 @@ class CoreAllocationServiceTest {
     @Test
     @DisplayName("getNextAvailableCore throws when both cores and lab config are missing")
     void getNextAvailableCore_coresAndConfigMissing_throwsIllegalStateException() {
+        coreAllocationRepository.deleteAll();
+        labConfigRepository.deleteAll();
         Assertions.assertThrows(IllegalStateException.class, () -> coreAllocationService.getNextAvailableCore());
     }
 
