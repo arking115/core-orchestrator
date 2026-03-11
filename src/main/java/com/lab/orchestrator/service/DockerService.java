@@ -18,6 +18,9 @@ public class DockerService {
     @Value("${storage.base-path}")
     private String basePath;
 
+    @Value("${storage.container-path:/home/student}")
+    private String containerPath;
+
     public void startContainer(String studentId, int coreNumber, double cpuLimit, int assignedPort) {
         validateStartContainerInputs(studentId, coreNumber, cpuLimit, assignedPort);
         ensureStudentDirectory(studentId);
@@ -27,7 +30,7 @@ public class DockerService {
                 ? config.getImageName()
                 : "ubuntu-rt-base";
 
-        String volumeMapping = String.format("%s/%s:/home/student", basePath, studentId);
+        String volumeMapping = String.format("%s/%s:%s", basePath, studentId, containerPath);
 
         String portMapping = String.format("%d:22", assignedPort);
 

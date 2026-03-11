@@ -14,6 +14,7 @@ import java.util.Optional;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -36,11 +37,15 @@ class DockerServiceTest {
     @InjectMocks
     private DockerService dockerService;
 
+    @BeforeEach
+    void setStoragePaths() {
+        ReflectionTestUtils.setField(dockerService, "basePath", "/opt/lab-data");
+        ReflectionTestUtils.setField(dockerService, "containerPath", "/home/student");
+    }
+
     @Test
     @DisplayName("startContainer builds exact docker run command (ports + volume) and ensures directory first")
     void startContainer_buildsExpectedCommand_andEnsuresDirectoryFirst() {
-        ReflectionTestUtils.setField(dockerService, "basePath", "/opt/lab-data");
-
         LabConfig config = new LabConfig();
         config.setImageName("ubuntu-rt-base-custom");
         when(labConfigRepository.findById(1L)).thenReturn(Optional.of(config));
@@ -62,8 +67,6 @@ class DockerServiceTest {
     @Test
     @DisplayName("When no LabConfig exists, startContainer falls back to default ubuntu-rt-base image")
     void startContainer_noConfig_usesDefaultImage() {
-        ReflectionTestUtils.setField(dockerService, "basePath", "/opt/lab-data");
-
         when(labConfigRepository.findById(1L)).thenReturn(Optional.empty());
         when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/student1"))).thenReturn("ok");
         when(commandExecutionService.executeCommand(eq(
@@ -83,7 +86,6 @@ class DockerServiceTest {
     @Test
     @DisplayName("If remote server is down (SSH fails), the exception is propagated and docker run is not attempted")
     void startContainer_remoteServerDown_throws_andDoesNotRunDocker() {
-        ReflectionTestUtils.setField(dockerService, "basePath", "/opt/lab-data");
         when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/student1")))
                 .thenThrow(new RuntimeException("Failed to execute SSH command"));
 
@@ -97,8 +99,6 @@ class DockerServiceTest {
     @Test
     @DisplayName("If student already has a running container, docker run error is propagated")
     void startContainer_containerNameAlreadyInUse_throws() {
-        ReflectionTestUtils.setField(dockerService, "basePath", "/opt/lab-data");
-
         when(labConfigRepository.findById(1L)).thenReturn(Optional.empty());
         when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/student1"))).thenReturn("ok");
         when(commandExecutionService.executeCommand(eq(
@@ -150,8 +150,6 @@ class DockerServiceTest {
             double cpuLimit,
             int assignedPort
     ) {
-        ReflectionTestUtils.setField(dockerService, "basePath", "/opt/lab-data");
-
         assertThrows(IllegalArgumentException.class,
                 () -> dockerService.startContainer(studentId, coreNumber, cpuLimit, assignedPort));
 
