@@ -14,26 +14,26 @@ class CommandExecutionServiceTest {
 
     // Uncomment when SSHed into a server
 
-    // @Test
-    // void testSshConnection() {
-    //     String result = commandExecutionService.executeCommand("echo %USERNAME%");
+     @Test
+     void testSshConnection() {
+         String result = commandExecutionService.executeCommand("echo %USERNAME%");
 
-    //     System.out.println("SSH command result: " + result);
+         System.out.println("SSH command result: " + result);
 
-    //     Assertions.assertNotNull(result);
-    //     Assertions.assertFalse(result.isBlank(), "SSH command result should not be empty");
-    // }
+         Assertions.assertNotNull(result);
+         Assertions.assertFalse(result.isBlank(), "SSH command result should not be empty");
+     }
 
-    // @Test
-    // void testInvalidCommandThrowsRuntimeException() {
-    //     Assertions.assertThrows(RuntimeException.class,
-    //             () -> commandExecutionService.executeCommand("this_command_should_fail_123"));
-    // }
+     @Test
+     void testInvalidCommandThrowsRuntimeException() {
+         Assertions.assertThrows(RuntimeException.class,
+                 () -> commandExecutionService.executeCommand("this_command_should_fail_123"));
+     }
 
-    // @Test
-    // void testEmptyCommandThrowsIllegalArgumentException() {
-    //     Assertions.assertThrows(IllegalArgumentException.class,
-    //             () -> commandExecutionService.executeCommand("   "));
-    // }
+     @Test
+     void testEmptyCommandThrowsIllegalArgumentException() {
+         Assertions.assertThrows(IllegalArgumentException.class,
+                 () -> commandExecutionService.executeCommand("   "));
+     }
 }
 
