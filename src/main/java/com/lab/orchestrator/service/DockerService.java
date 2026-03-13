@@ -23,14 +23,16 @@ public class DockerService {
 
     public void startContainer(String studentId, int coreNumber, double cpuLimit, int assignedPort) {
         validateStartContainerInputs(studentId, coreNumber, cpuLimit, assignedPort);
-        ensureStudentDirectory(studentId);
 
         LabConfig config = labConfigRepository.findById(1L).orElse(null);
         String imageName = (config != null && config.getImageName() != null && !config.getImageName().isBlank())
                 ? config.getImageName()
                 : "ubuntu-rt-base";
 
-        String volumeMapping = String.format("%s/%s:%s", basePath, studentId, containerPath);
+        String sanitizedImageName = sanitizeForPath(imageName);
+        ensureStudentDirectory(sanitizedImageName, studentId);
+
+        String volumeMapping = String.format("%s/%s/%s:%s", basePath, sanitizedImageName, studentId, containerPath);
 
         String portMapping = String.format("%d:22", assignedPort);
 
@@ -54,12 +56,19 @@ public class DockerService {
         commandExecutionService.executeCommand(removeCommand);
     }
 
-    private void ensureStudentDirectory(String studentId) {
-        String studentDirectory = String.format("%s/%s", basePath, studentId);
+    private void ensureStudentDirectory(String imageDir, String studentId) {
+        String studentDirectory = String.format("%s/%s/%s", basePath, imageDir, studentId);
         String mkdirCommand = String.format("mkdir -p %s", studentDirectory);
 
         log.info("Ensuring directory exists for student {}: {}", studentId, studentDirectory);
         commandExecutionService.executeCommand(mkdirCommand);
+    }
+
+    private String sanitizeForPath(String imageName) {
+        return imageName
+                .replace("/", "_")
+                .replace(":", "_")
+                .replace(" ", "_");
     }
 
     private static void validateStartContainerInputs(String studentId, int coreNumber, double cpuLimit, int assignedPort) {

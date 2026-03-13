@@ -4,6 +4,7 @@ import com.lab.orchestrator.model.CoreAllocation;
 import com.lab.orchestrator.model.LabConfig;
 import com.lab.orchestrator.repository.CoreAllocationRepository;
 import com.lab.orchestrator.repository.LabConfigRepository;
+import com.lab.orchestrator.repository.LabSessionRepository;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,11 +14,14 @@ public class CoreAllocationService {
 
     private final CoreAllocationRepository coreAllocationRepository;
     private final LabConfigRepository labConfigRepository;
+    private final LabSessionRepository labSessionRepository;
 
     public CoreAllocationService(CoreAllocationRepository coreAllocationRepository,
-                                 LabConfigRepository labConfigRepository) {
+                                 LabConfigRepository labConfigRepository,
+                                 LabSessionRepository labSessionRepository) {
         this.coreAllocationRepository = coreAllocationRepository;
         this.labConfigRepository = labConfigRepository;
+        this.labSessionRepository = labSessionRepository;
     }
 
     @Transactional
@@ -36,6 +40,7 @@ public class CoreAllocationService {
 
         coreAllocationRepository.deleteAll();
         labConfigRepository.deleteAll();
+        labSessionRepository.deleteAll();
 
         LabConfig config = new LabConfig();
         config.setId(1L);
@@ -46,7 +51,8 @@ public class CoreAllocationService {
         // Pessimistic resource allocation, calculation of the limit based on the worst case core.
         int maxStudentsPerCore = (int) Math.ceil((double) totalStudents / coreNumbers.size());
 
-        double cpuLimit = 1.0 / maxStudentsPerCore;
+        double rawCpuLimit = 1.0 / maxStudentsPerCore;
+        double cpuLimit = Math.round(rawCpuLimit * 100.0) / 100.0;
 
         for (Integer coreNumber : coreNumbers) {
             CoreAllocation allocation = new CoreAllocation();

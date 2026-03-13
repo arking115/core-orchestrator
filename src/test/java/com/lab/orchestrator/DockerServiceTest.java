@@ -1,5 +1,6 @@
 package com.lab.orchestrator.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
@@ -49,18 +50,18 @@ class DockerServiceTest {
         LabConfig config = new LabConfig();
         config.setImageName("ubuntu-rt-base-custom");
         when(labConfigRepository.findById(1L)).thenReturn(Optional.of(config));
-        when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/student1"))).thenReturn("ok");
+        when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/ubuntu-rt-base-custom/student1"))).thenReturn("ok");
         when(commandExecutionService.executeCommand(eq(
-                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base-custom"
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/ubuntu-rt-base-custom/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base-custom"
         ))).thenReturn("container-id");
 
         dockerService.startContainer("student1", 2, 1.5, 2222);
 
         InOrder inOrder = inOrder(commandExecutionService, labConfigRepository);
-        inOrder.verify(commandExecutionService).executeCommand("mkdir -p /opt/lab-data/student1");
         inOrder.verify(labConfigRepository).findById(1L);
+        inOrder.verify(commandExecutionService).executeCommand("mkdir -p /opt/lab-data/ubuntu-rt-base-custom/student1");
         inOrder.verify(commandExecutionService).executeCommand(
-                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base-custom"
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/ubuntu-rt-base-custom/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base-custom"
         );
     }
 
@@ -68,50 +69,51 @@ class DockerServiceTest {
     @DisplayName("When no LabConfig exists, startContainer falls back to default ubuntu-rt-base image")
     void startContainer_noConfig_usesDefaultImage() {
         when(labConfigRepository.findById(1L)).thenReturn(Optional.empty());
-        when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/student1"))).thenReturn("ok");
+        when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/ubuntu-rt-base/student1"))).thenReturn("ok");
         when(commandExecutionService.executeCommand(eq(
-                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/ubuntu-rt-base/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
         ))).thenReturn("container-id");
 
         dockerService.startContainer("student1", 2, 1.5, 2222);
 
         InOrder inOrder = inOrder(commandExecutionService, labConfigRepository);
-        inOrder.verify(commandExecutionService).executeCommand("mkdir -p /opt/lab-data/student1");
         inOrder.verify(labConfigRepository).findById(1L);
+        inOrder.verify(commandExecutionService).executeCommand("mkdir -p /opt/lab-data/ubuntu-rt-base/student1");
         inOrder.verify(commandExecutionService).executeCommand(
-                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/ubuntu-rt-base/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
         );
     }
 
     @Test
     @DisplayName("If remote server is down (SSH fails), the exception is propagated and docker run is not attempted")
     void startContainer_remoteServerDown_throws_andDoesNotRunDocker() {
-        when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/student1")))
+        when(labConfigRepository.findById(1L)).thenReturn(Optional.empty());
+        when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/ubuntu-rt-base/student1")))
                 .thenThrow(new RuntimeException("Failed to execute SSH command"));
 
         assertThrows(RuntimeException.class, () -> dockerService.startContainer("student1", 2, 1.5, 2222));
 
-        verify(commandExecutionService).executeCommand("mkdir -p /opt/lab-data/student1");
+        verify(labConfigRepository).findById(1L);
+        verify(commandExecutionService).executeCommand("mkdir -p /opt/lab-data/ubuntu-rt-base/student1");
         verify(commandExecutionService, never()).executeCommand(org.mockito.ArgumentMatchers.startsWith("docker run"));
-        verifyNoInteractions(labConfigRepository);
     }
 
     @Test
     @DisplayName("If student already has a running container, docker run error is propagated")
     void startContainer_containerNameAlreadyInUse_throws() {
         when(labConfigRepository.findById(1L)).thenReturn(Optional.empty());
-        when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/student1"))).thenReturn("ok");
+        when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/ubuntu-rt-base/student1"))).thenReturn("ok");
         when(commandExecutionService.executeCommand(eq(
-                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/ubuntu-rt-base/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
         ))).thenThrow(new RuntimeException("Conflict. The container name \"student1\" is already in use."));
 
         assertThrows(RuntimeException.class, () -> dockerService.startContainer("student1", 2, 1.5, 2222));
 
         InOrder inOrder = inOrder(commandExecutionService, labConfigRepository);
-        inOrder.verify(commandExecutionService).executeCommand("mkdir -p /opt/lab-data/student1");
         inOrder.verify(labConfigRepository).findById(1L);
+        inOrder.verify(commandExecutionService).executeCommand("mkdir -p /opt/lab-data/ubuntu-rt-base/student1");
         inOrder.verify(commandExecutionService).executeCommand(
-                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/ubuntu-rt-base/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
         );
     }
 
@@ -164,6 +166,46 @@ class DockerServiceTest {
                 Arguments.of("student1", 0, 1.0, 2222),
                 Arguments.of("student1", 2, 0.0, 2222),
                 Arguments.of("student1", 2, 1.0, 0)
+        );
+    }
+
+    @Test
+    @DisplayName("Image name with registry and tag is sanitized for directory path")
+    void startContainer_imageNameWithSpecialChars_sanitizesForPath() {
+        LabConfig config = new LabConfig();
+        config.setImageName("myregistry.io/lab/ubuntu-rt:v2.0");
+        when(labConfigRepository.findById(1L)).thenReturn(Optional.of(config));
+        when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/myregistry.io_lab_ubuntu-rt_v2.0/student1"))).thenReturn("ok");
+        when(commandExecutionService.executeCommand(eq(
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/myregistry.io_lab_ubuntu-rt_v2.0/student1:/home/student --cap-add=SYS_NICE --privileged myregistry.io/lab/ubuntu-rt:v2.0"
+        ))).thenReturn("container-id");
+
+        dockerService.startContainer("student1", 2, 1.5, 2222);
+
+        InOrder inOrder = inOrder(commandExecutionService, labConfigRepository);
+        inOrder.verify(labConfigRepository).findById(1L);
+        inOrder.verify(commandExecutionService).executeCommand("mkdir -p /opt/lab-data/myregistry.io_lab_ubuntu-rt_v2.0/student1");
+        inOrder.verify(commandExecutionService).executeCommand(
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/myregistry.io_lab_ubuntu-rt_v2.0/student1:/home/student --cap-add=SYS_NICE --privileged myregistry.io/lab/ubuntu-rt:v2.0"
+        );
+    }
+
+    @ParameterizedTest(name = "sanitizeForPath(\"{0}\") = \"{1}\"")
+    @MethodSource("sanitizeForPathTestCases")
+    @DisplayName("sanitizeForPath replaces slashes, colons, and spaces with underscores")
+    void sanitizeForPath_replacesSpecialChars(String input, String expected) {
+        String result = ReflectionTestUtils.invokeMethod(dockerService, "sanitizeForPath", input);
+        assertEquals(expected, result);
+    }
+
+    private static Stream<Arguments> sanitizeForPathTestCases() {
+        return Stream.of(
+                Arguments.of("ubuntu-rt-base", "ubuntu-rt-base"),
+                Arguments.of("image:latest", "image_latest"),
+                Arguments.of("registry/image", "registry_image"),
+                Arguments.of("registry.io/org/image:v1.0", "registry.io_org_image_v1.0"),
+                Arguments.of("image with spaces", "image_with_spaces"),
+                Arguments.of("a/b:c d", "a_b_c_d")
         );
     }
 }
