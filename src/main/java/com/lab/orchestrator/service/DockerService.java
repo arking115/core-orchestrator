@@ -42,7 +42,13 @@ public class DockerService {
         );
 
         log.info("Starting Docker container for student {} with command: {}", studentId, command);
-        commandExecutionService.executeCommand(command);
+        try {
+            commandExecutionService.executeCommand(command);
+        } catch (Exception e) {
+            log.error("Failed to start container for student {}, rolling back directory creation", studentId, e);
+            rollbackStudentDirectory(sanitizedImageName, studentId);
+            throw e;
+        }
     }
 
     public void stopContainer(String studentId) {
@@ -62,6 +68,18 @@ public class DockerService {
 
         log.info("Ensuring directory exists for student {}: {}", studentId, studentDirectory);
         commandExecutionService.executeCommand(mkdirCommand);
+    }
+
+    private void rollbackStudentDirectory(String imageDir, String studentId) {
+        String studentDirectory = String.format("%s/%s/%s", basePath, imageDir, studentId);
+        String rmCommand = String.format("rm -rf %s", studentDirectory);
+
+        log.info("Rolling back directory for student {}: {}", studentId, studentDirectory);
+        try {
+            commandExecutionService.executeCommand(rmCommand);
+        } catch (Exception rollbackEx) {
+            log.error("CRITICAL: Failed to rollback directory {} - manual cleanup required", studentDirectory, rollbackEx);
+        }
     }
 
     private String sanitizeForPath(String imageName) {

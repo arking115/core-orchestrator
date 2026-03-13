@@ -99,13 +99,14 @@ class DockerServiceTest {
     }
 
     @Test
-    @DisplayName("If student already has a running container, docker run error is propagated")
-    void startContainer_containerNameAlreadyInUse_throws() {
+    @DisplayName("If student already has a running container, docker run error is propagated and directory is rolled back")
+    void startContainer_containerNameAlreadyInUse_throws_andRollsBackDirectory() {
         when(labConfigRepository.findById(1L)).thenReturn(Optional.empty());
         when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/ubuntu-rt-base/student1"))).thenReturn("ok");
         when(commandExecutionService.executeCommand(eq(
                 "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/ubuntu-rt-base/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
         ))).thenThrow(new RuntimeException("Conflict. The container name \"student1\" is already in use."));
+        when(commandExecutionService.executeCommand(eq("rm -rf /opt/lab-data/ubuntu-rt-base/student1"))).thenReturn("ok");
 
         assertThrows(RuntimeException.class, () -> dockerService.startContainer("student1", 2, 1.5, 2222));
 
@@ -115,6 +116,7 @@ class DockerServiceTest {
         inOrder.verify(commandExecutionService).executeCommand(
                 "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/ubuntu-rt-base/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
         );
+        inOrder.verify(commandExecutionService).executeCommand("rm -rf /opt/lab-data/ubuntu-rt-base/student1");
     }
 
     @Test
@@ -207,6 +209,53 @@ class DockerServiceTest {
                 Arguments.of("image with spaces", "image_with_spaces"),
                 Arguments.of("a/b:c d", "a_b_c_d")
         );
+    }
+
+    @Test
+    @DisplayName("When docker run fails, directory rollback succeeds and original exception is propagated")
+    void startContainer_dockerRunFails_rollbackSucceeds_propagatesOriginalException() {
+        when(labConfigRepository.findById(1L)).thenReturn(Optional.empty());
+        when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/ubuntu-rt-base/student1"))).thenReturn("ok");
+        RuntimeException dockerException = new RuntimeException("Docker daemon not responding");
+        when(commandExecutionService.executeCommand(eq(
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/ubuntu-rt-base/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
+        ))).thenThrow(dockerException);
+        when(commandExecutionService.executeCommand(eq("rm -rf /opt/lab-data/ubuntu-rt-base/student1"))).thenReturn("ok");
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> dockerService.startContainer("student1", 2, 1.5, 2222));
+
+        assertEquals(dockerException, thrown);
+        InOrder inOrder = inOrder(commandExecutionService);
+        inOrder.verify(commandExecutionService).executeCommand("mkdir -p /opt/lab-data/ubuntu-rt-base/student1");
+        inOrder.verify(commandExecutionService).executeCommand(
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/ubuntu-rt-base/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
+        );
+        inOrder.verify(commandExecutionService).executeCommand("rm -rf /opt/lab-data/ubuntu-rt-base/student1");
+    }
+
+    @Test
+    @DisplayName("When docker run fails and rollback also fails, original exception is still propagated")
+    void startContainer_dockerRunFails_rollbackFails_propagatesOriginalException() {
+        when(labConfigRepository.findById(1L)).thenReturn(Optional.empty());
+        when(commandExecutionService.executeCommand(eq("mkdir -p /opt/lab-data/ubuntu-rt-base/student1"))).thenReturn("ok");
+        RuntimeException dockerException = new RuntimeException("Docker daemon not responding");
+        when(commandExecutionService.executeCommand(eq(
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/ubuntu-rt-base/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
+        ))).thenThrow(dockerException);
+        when(commandExecutionService.executeCommand(eq("rm -rf /opt/lab-data/ubuntu-rt-base/student1")))
+                .thenThrow(new RuntimeException("SSH connection lost during rollback"));
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> dockerService.startContainer("student1", 2, 1.5, 2222));
+
+        assertEquals(dockerException, thrown, "Original docker exception should be propagated, not the rollback exception");
+        InOrder inOrder = inOrder(commandExecutionService);
+        inOrder.verify(commandExecutionService).executeCommand("mkdir -p /opt/lab-data/ubuntu-rt-base/student1");
+        inOrder.verify(commandExecutionService).executeCommand(
+                "docker run -d --name student1 --cpuset-cpus=\"2\" --cpus=\"1.5\" -p 2222:22 -v /opt/lab-data/ubuntu-rt-base/student1:/home/student --cap-add=SYS_NICE --privileged ubuntu-rt-base"
+        );
+        inOrder.verify(commandExecutionService).executeCommand("rm -rf /opt/lab-data/ubuntu-rt-base/student1");
     }
 }
 
