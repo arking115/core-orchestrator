@@ -259,4 +259,93 @@ class TeacherLabControllerTest {
                 .andExpect(jsonPath("$.failedStudentIds[1]").value("student4"))
                 .andExpect(jsonPath("$.allSuccessful").value(false));
     }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop/{studentId} with valid studentId calls service and returns 200 OK")
+    void stopStudent_validStudentId_callsServiceAndReturns200() throws Exception {
+        mockMvc.perform(post("/api/teacher/stop/student123"))
+                .andExpect(status().isOk());
+
+        verify(labSessionService).stopSession("student123");
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop/{studentId} when session not found returns 500")
+    void stopStudent_sessionNotFound_returns500() throws Exception {
+        doThrow(new IllegalArgumentException("No active session found for student: student123"))
+                .when(labSessionService).stopSession("student123");
+
+        mockMvc.perform(post("/api/teacher/stop/student123"))
+                .andExpect(status().isInternalServerError());
+
+        verify(labSessionService).stopSession("student123");
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop/{studentId} when Docker fails returns 500")
+    void stopStudent_dockerFailure_returns500() throws Exception {
+        doThrow(new RuntimeException("Docker daemon not responding"))
+                .when(labSessionService).stopSession("student123");
+
+        mockMvc.perform(post("/api/teacher/stop/student123"))
+                .andExpect(status().isInternalServerError());
+
+        verify(labSessionService).stopSession("student123");
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop/{studentId} with special characters in studentId works correctly")
+    void stopStudent_specialCharactersInStudentId_callsServiceAndReturns200() throws Exception {
+        mockMvc.perform(post("/api/teacher/stop/student-123_test"))
+                .andExpect(status().isOk());
+
+        verify(labSessionService).stopSession("student-123_test");
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop/{studentId} with numeric studentId works correctly")
+    void stopStudent_numericStudentId_callsServiceAndReturns200() throws Exception {
+        mockMvc.perform(post("/api/teacher/stop/12345"))
+                .andExpect(status().isOk());
+
+        verify(labSessionService).stopSession("12345");
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop/{studentId} with invalid characters returns 500")
+    void stopStudent_invalidCharacters_returns500() throws Exception {
+        doThrow(new IllegalArgumentException("studentId must start with alphanumeric and contain only alphanumeric, underscore, or hyphen characters"))
+                .when(labSessionService).stopSession("student@email");
+
+        mockMvc.perform(post("/api/teacher/stop/student@email"))
+                .andExpect(status().isInternalServerError());
+
+        verify(labSessionService).stopSession("student@email");
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop/{studentId} with path traversal attempt returns 500")
+    void stopStudent_pathTraversalAttempt_returns500() throws Exception {
+        doThrow(new IllegalArgumentException("studentId must start with alphanumeric and contain only alphanumeric, underscore, or hyphen characters"))
+                .when(labSessionService).stopSession("..%2F..%2Fetc");
+
+        mockMvc.perform(post("/api/teacher/stop/..%2F..%2Fetc"))
+                .andExpect(status().isInternalServerError());
+
+        verify(labSessionService).stopSession("..%2F..%2Fetc");
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop/{studentId} with studentId exceeding max length returns 500")
+    void stopStudent_exceedsMaxLength_returns500() throws Exception {
+        String longStudentId = "a".repeat(65);
+
+        doThrow(new IllegalArgumentException("studentId must not exceed 64 characters"))
+                .when(labSessionService).stopSession(longStudentId);
+
+        mockMvc.perform(post("/api/teacher/stop/" + longStudentId))
+                .andExpect(status().isInternalServerError());
+
+        verify(labSessionService).stopSession(longStudentId);
+    }
 }

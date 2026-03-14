@@ -20,4 +20,9 @@ public class StudentLabController {
     public LabSession start(@RequestBody LabStartRequest request) {
         return labSessionService.startSession(request.getStudentId());
     }
+
+    @PostMapping("/stop")
+    public void stop(@RequestBody LabStartRequest request) {
+        labSessionService.stopSession(request.getStudentId());
+    }
 }

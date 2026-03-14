@@ -5,9 +5,9 @@ import com.lab.orchestrator.model.CoreAllocation;
 import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.repository.LabSessionRepository;
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 @Service
 public class LabSessionService {
+
+    private static final Pattern VALID_STUDENT_ID_PATTERN = Pattern.compile("^[a-zA-Z0-9][a-zA-Z0-9_-]*$");
+    private static final int MAX_STUDENT_ID_LENGTH = 64;
 
     private final LabSessionRepository labSessionRepository;
     private final PortManagerService portManagerService;
@@ -33,9 +36,7 @@ public class LabSessionService {
 
     @Transactional
     public LabSession startSession(String studentId) {
-        if (studentId == null || studentId.isBlank()) {
-            throw new IllegalArgumentException("studentId must not be null or blank");
-        }
+        validateStudentId(studentId);
         return labSessionRepository.findById(studentId)
                 .orElseGet(() -> {
                     int assignedPort = portManagerService.getAvailablePort();
@@ -54,6 +55,25 @@ public class LabSessionService {
 
                     return labSessionRepository.save(session);
                 });
+    }
+
+    public void stopSession(String studentId) {
+        validateStudentId(studentId);
+
+        LabSession session = labSessionRepository.findById(studentId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No active session found for student: " + studentId));
+
+        log.info("Stopping session for student {}", studentId);
+
+        dockerService.stopContainer(studentId);
+        log.info("Stopped container for student {}", studentId);
+
+        coreAllocationService.releaseCore(session.getAssignedCore());
+        log.info("Released core {} for student {}", session.getAssignedCore(), studentId);
+
+        labSessionRepository.delete(session);
+        log.info("Deleted session for student {}", studentId);
     }
 
     public StopSessionsResult stopAllActiveSessions() {
@@ -90,5 +110,19 @@ public class LabSessionService {
                 .successfullyStoppedCount(successCount)
                 .failedStudentIds(failures)
                 .build();
+    }
+
+    private void validateStudentId(String studentId) {
+        if (studentId == null || studentId.isBlank()) {
+            throw new IllegalArgumentException("studentId must not be null or blank");
+        }
+        if (studentId.length() > MAX_STUDENT_ID_LENGTH) {
+            throw new IllegalArgumentException(
+                    "studentId must not exceed " + MAX_STUDENT_ID_LENGTH + " characters");
+        }
+        if (!VALID_STUDENT_ID_PATTERN.matcher(studentId).matches()) {
+            throw new IllegalArgumentException(
+                    "studentId must start with alphanumeric and contain only alphanumeric, underscore, or hyphen characters");
+        }
     }
 }

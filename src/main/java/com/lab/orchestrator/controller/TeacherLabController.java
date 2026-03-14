@@ -5,6 +5,7 @@ import com.lab.orchestrator.dto.StopSessionsResult;
 import com.lab.orchestrator.service.CoreAllocationService;
 import com.lab.orchestrator.service.LabSessionService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,5 +31,10 @@ public class TeacherLabController {
     @PostMapping("/stop-all")
     public StopSessionsResult stopAll() {
         return labSessionService.stopAllActiveSessions();
+    }
+
+    @PostMapping("/stop/{studentId}")
+    public void stopStudent(@PathVariable String studentId) {
+        labSessionService.stopSession(studentId);
     }
 }

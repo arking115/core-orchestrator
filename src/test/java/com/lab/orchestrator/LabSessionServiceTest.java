@@ -205,5 +205,133 @@ class LabSessionServiceTest {
         assertTrue(result.getFailedStudentIds().contains("student1"));
         assertFalse(result.isAllSuccessful());
     }
+
+    @Test
+    @DisplayName("stopSession stops container, releases core, and deletes session for valid studentId")
+    void stopSession_validStudentId_stopsContainerReleasesCoreAndDeletesSession() {
+        LabSession session = new LabSession();
+        session.setStudentId("student1");
+        session.setAssignedPort(30001);
+        session.setAssignedCore(2);
+        session.setStartTime(LocalDateTime.now());
+
+        when(labSessionRepository.findById("student1")).thenReturn(Optional.of(session));
+
+        labSessionService.stopSession("student1");
+
+        verify(dockerService).stopContainer("student1");
+        verify(coreAllocationService).releaseCore(2);
+        verify(labSessionRepository).delete(session);
+    }
+
+    @Test
+    @DisplayName("stopSession rejects null or blank studentId with IllegalArgumentException")
+    void stopSession_nullOrBlankStudentId_throwsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.stopSession(null));
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.stopSession(""));
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.stopSession("   "));
+
+        verifyNoInteractions(labSessionRepository, dockerService, coreAllocationService);
+    }
+
+    @Test
+    @DisplayName("stopSession throws IllegalArgumentException when session not found")
+    void stopSession_sessionNotFound_throwsIllegalArgumentException() {
+        when(labSessionRepository.findById("student2")).thenReturn(Optional.empty());
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> labSessionService.stopSession("student2"));
+
+        assertEquals("No active session found for student: student2", exception.getMessage());
+
+        verify(labSessionRepository).findById("student2");
+        verify(dockerService, never()).stopContainer(any());
+        verify(coreAllocationService, never()).releaseCore(any());
+        verify(labSessionRepository, never()).delete(any(LabSession.class));
+    }
+
+    @Test
+    @DisplayName("startSession rejects studentId with invalid characters")
+    void startSession_invalidCharacters_throwsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.startSession("student@email.com"));
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.startSession("student;rm -rf /"));
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.startSession("../../../etc/passwd"));
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.startSession("student name"));
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.startSession("student#123"));
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.startSession("student$var"));
+
+        verifyNoInteractions(labSessionRepository, portManagerService, coreAllocationService, dockerService);
+    }
+
+    @Test
+    @DisplayName("startSession rejects studentId starting with non-alphanumeric character")
+    void startSession_startsWithNonAlphanumeric_throwsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.startSession("-student1"));
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.startSession("_student1"));
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.startSession(".student1"));
+
+        verifyNoInteractions(labSessionRepository, portManagerService, coreAllocationService, dockerService);
+    }
+
+    @Test
+    @DisplayName("startSession rejects studentId exceeding max length")
+    void startSession_exceedsMaxLength_throwsIllegalArgumentException() {
+        String longStudentId = "a".repeat(65);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> labSessionService.startSession(longStudentId));
+
+        assertTrue(exception.getMessage().contains("must not exceed 64 characters"));
+        verifyNoInteractions(labSessionRepository, portManagerService, coreAllocationService, dockerService);
+    }
+
+    @Test
+    @DisplayName("startSession accepts valid studentId formats")
+    void startSession_validFormats_accepted() {
+        when(labSessionRepository.findById(any())).thenReturn(Optional.empty());
+        when(portManagerService.getAvailablePort()).thenReturn(30001);
+        CoreAllocation allocation = new CoreAllocation();
+        allocation.setCoreNumber(1);
+        allocation.setCpuLimit(0.5);
+        when(coreAllocationService.getNextAvailableCore()).thenReturn(allocation);
+        when(labSessionRepository.save(any(LabSession.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        labSessionService.startSession("student1");
+        labSessionService.startSession("Student_123");
+        labSessionService.startSession("STUDENT-456");
+        labSessionService.startSession("s");
+        labSessionService.startSession("123456");
+        labSessionService.startSession("a".repeat(64));
+
+        verify(labSessionRepository).findById("student1");
+        verify(labSessionRepository).findById("Student_123");
+        verify(labSessionRepository).findById("STUDENT-456");
+        verify(labSessionRepository).findById("s");
+        verify(labSessionRepository).findById("123456");
+        verify(labSessionRepository).findById("a".repeat(64));
+    }
+
+    @Test
+    @DisplayName("stopSession rejects studentId with invalid characters")
+    void stopSession_invalidCharacters_throwsIllegalArgumentException() {
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.stopSession("student@email.com"));
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.stopSession("student;rm -rf /"));
+        assertThrows(IllegalArgumentException.class, () -> labSessionService.stopSession("../../../etc/passwd"));
+
+        verifyNoInteractions(labSessionRepository, dockerService, coreAllocationService);
+    }
+
+    @Test
+    @DisplayName("stopSession rejects studentId exceeding max length")
+    void stopSession_exceedsMaxLength_throwsIllegalArgumentException() {
+        String longStudentId = "a".repeat(65);
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class,
+                () -> labSessionService.stopSession(longStudentId));
+
+        assertTrue(exception.getMessage().contains("must not exceed 64 characters"));
+        verifyNoInteractions(labSessionRepository, dockerService, coreAllocationService);
+    }
 }
 
