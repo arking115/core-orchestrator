@@ -1,15 +1,20 @@
 package com.lab.orchestrator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.lab.orchestrator.dto.StopSessionsResult;
 import com.lab.orchestrator.model.CoreAllocation;
 import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.repository.LabSessionRepository;
@@ -18,6 +23,8 @@ import com.lab.orchestrator.service.DockerService;
 import com.lab.orchestrator.service.LabSessionService;
 import com.lab.orchestrator.service.PortManagerService;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -119,6 +126,84 @@ class LabSessionServiceTest {
         verify(coreAllocationService).getNextAvailableCore();
         verifyNoInteractions(dockerService);
         verify(labSessionRepository, never()).save(any(LabSession.class));
+    }
+
+    @Test
+    @DisplayName("stopAllActiveSessions stops all containers in parallel and clears database when sessions exist")
+    void stopsAllContainersAndClearsDatabase_whenSessionsExist() {
+        LabSession session1 = new LabSession();
+        session1.setStudentId("student1");
+        session1.setAssignedPort(30001);
+        session1.setAssignedCore(1);
+        session1.setStartTime(LocalDateTime.now());
+
+        LabSession session2 = new LabSession();
+        session2.setStudentId("student2");
+        session2.setAssignedPort(30002);
+        session2.setAssignedCore(2);
+        session2.setStartTime(LocalDateTime.now());
+
+        when(labSessionRepository.findAll()).thenReturn(List.of(session1, session2));
+        doNothing().when(dockerService).stopContainer(any());
+
+        StopSessionsResult result = labSessionService.stopAllActiveSessions();
+
+        verify(dockerService).stopContainer("student1");
+        verify(dockerService).stopContainer("student2");
+        verify(labSessionRepository).deleteAll();
+
+        assertEquals(2, result.getTotalSessions());
+        assertEquals(2, result.getSuccessfullyStoppedCount());
+        assertTrue(result.getFailedStudentIds().isEmpty());
+        assertTrue(result.isAllSuccessful());
+    }
+
+    @Test
+    @DisplayName("stopAllActiveSessions does not call docker but clears database when no sessions exist")
+    void doesNotCallDockerButClearsDatabase_whenNoSessionsExist() {
+        when(labSessionRepository.findAll()).thenReturn(Collections.emptyList());
+
+        StopSessionsResult result = labSessionService.stopAllActiveSessions();
+
+        verifyNoInteractions(dockerService);
+        verify(labSessionRepository).deleteAll();
+
+        assertEquals(0, result.getTotalSessions());
+        assertEquals(0, result.getSuccessfullyStoppedCount());
+        assertTrue(result.getFailedStudentIds().isEmpty());
+        assertTrue(result.isAllSuccessful());
+    }
+
+    @Test
+    @DisplayName("stopAllActiveSessions continues to stop next containers and clears database when one container throws exception")
+    void continuesToStopNextContainersAndClearsDatabase_whenOneContainerThrowsException() {
+        LabSession session1 = new LabSession();
+        session1.setStudentId("student1");
+        session1.setAssignedPort(30001);
+        session1.setAssignedCore(1);
+        session1.setStartTime(LocalDateTime.now());
+
+        LabSession session2 = new LabSession();
+        session2.setStudentId("student2");
+        session2.setAssignedPort(30002);
+        session2.setAssignedCore(2);
+        session2.setStartTime(LocalDateTime.now());
+
+        when(labSessionRepository.findAll()).thenReturn(List.of(session1, session2));
+        doThrow(new RuntimeException("Container not found")).when(dockerService).stopContainer("student1");
+        doNothing().when(dockerService).stopContainer("student2");
+
+        StopSessionsResult result = labSessionService.stopAllActiveSessions();
+
+        verify(dockerService).stopContainer("student1");
+        verify(dockerService).stopContainer("student2");
+        verify(labSessionRepository).deleteAll();
+
+        assertEquals(2, result.getTotalSessions());
+        assertEquals(1, result.getSuccessfullyStoppedCount());
+        assertEquals(1, result.getFailedStudentIds().size());
+        assertTrue(result.getFailedStudentIds().contains("student1"));
+        assertFalse(result.isAllSuccessful());
     }
 }
 

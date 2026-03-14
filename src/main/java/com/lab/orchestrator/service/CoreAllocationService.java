@@ -38,9 +38,7 @@ public class CoreAllocationService {
             throw new IllegalArgumentException("All core numbers must be positive and non-zero (Core 0 is reserved).");
         }
 
-        coreAllocationRepository.deleteAll();
-        labConfigRepository.deleteAll();
-        labSessionRepository.deleteAll();
+        clearAllData();
 
         LabConfig config = new LabConfig();
         config.setId(1L);
@@ -61,6 +59,13 @@ public class CoreAllocationService {
             allocation.setCpuLimit(cpuLimit);
             coreAllocationRepository.save(allocation);
         }
+    }
+
+    @Transactional
+    public void clearAllData() {
+        coreAllocationRepository.deleteAll();
+        labConfigRepository.deleteAll();
+        labSessionRepository.deleteAll();
     }
 
     @Transactional

@@ -1,18 +1,27 @@
 package com.lab.orchestrator.controller;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.lab.orchestrator.dto.StopSessionsResult;
 import com.lab.orchestrator.service.CoreAllocationService;
+import com.lab.orchestrator.service.LabSessionService;
 import com.lab.orchestrator.exception.GlobalExceptionHandler;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -28,6 +37,9 @@ class TeacherLabControllerTest {
 
     @MockBean
     private CoreAllocationService coreAllocationService;
+
+    @MockBean
+    private LabSessionService labSessionService;
 
     @Test
     @DisplayName("POST /api/teacher/initialize with valid request calls initializeCores and returns 200 OK")
@@ -103,5 +115,148 @@ class TeacherLabControllerTest {
                         .contentType(APPLICATION_JSON)
                         .content(json))
                 .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/initialize calls stopAllActiveSessions before initializeCores")
+    void initialize_callsStopAllActiveSessionsBeforeInitializeCores() throws Exception {
+        String json = """
+                {
+                    "totalStudents": 10,
+                    "coreNumbers": [1, 2, 3],
+                    "imageName": "my-lab-image"
+                }
+                """;
+
+        when(labSessionService.stopAllActiveSessions()).thenReturn(
+                StopSessionsResult.builder()
+                        .totalSessions(0)
+                        .successfullyStoppedCount(0)
+                        .failedStudentIds(Collections.emptyList())
+                        .build());
+
+        mockMvc.perform(post("/api/teacher/initialize")
+                        .contentType(APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isOk());
+
+        InOrder inOrder = inOrder(labSessionService, coreAllocationService);
+        inOrder.verify(labSessionService).stopAllActiveSessions();
+        inOrder.verify(coreAllocationService).initializeCores(eq(10), eq(List.of(1, 2, 3)), eq("my-lab-image"));
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop-all calls stopAllActiveSessions and returns 200 OK with result")
+    void stopAll_callsServiceAndReturns200() throws Exception {
+        when(labSessionService.stopAllActiveSessions()).thenReturn(
+                StopSessionsResult.builder()
+                        .totalSessions(5)
+                        .successfullyStoppedCount(5)
+                        .failedStudentIds(Collections.emptyList())
+                        .build());
+
+        mockMvc.perform(post("/api/teacher/stop-all"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalSessions").value(5))
+                .andExpect(jsonPath("$.successfullyStoppedCount").value(5))
+                .andExpect(jsonPath("$.failedStudentIds").isEmpty())
+                .andExpect(jsonPath("$.allSuccessful").value(true));
+
+        verify(labSessionService).stopAllActiveSessions();
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop-all when service throws RuntimeException returns 500")
+    void stopAll_serviceThrowsRuntimeException_returns500() throws Exception {
+        when(labSessionService.stopAllActiveSessions())
+                .thenThrow(new RuntimeException("Docker daemon not responding"));
+
+        mockMvc.perform(post("/api/teacher/stop-all"))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop-all when service throws IllegalStateException returns 500")
+    void stopAll_serviceThrowsIllegalStateException_returns500() throws Exception {
+        when(labSessionService.stopAllActiveSessions())
+                .thenThrow(new IllegalStateException("Database connection lost"));
+
+        mockMvc.perform(post("/api/teacher/stop-all"))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop-all completes even if slow (simulated delay)")
+    void stopAll_slowExecution_eventuallyCompletes() throws Exception {
+        AtomicBoolean methodCalled = new AtomicBoolean(false);
+
+        when(labSessionService.stopAllActiveSessions()).thenAnswer(invocation -> {
+            Thread.sleep(100);
+            methodCalled.set(true);
+            return StopSessionsResult.builder()
+                    .totalSessions(10)
+                    .successfullyStoppedCount(10)
+                    .failedStudentIds(Collections.emptyList())
+                    .build();
+        });
+
+        mockMvc.perform(post("/api/teacher/stop-all"))
+                .andExpect(status().isOk());
+
+        verify(labSessionService).stopAllActiveSessions();
+        assert methodCalled.get() : "stopAllActiveSessions should have been called";
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop-all can be interrupted during long operation")
+    void stopAll_interruptedDuringExecution_throwsException() throws Exception {
+        when(labSessionService.stopAllActiveSessions())
+                .thenThrow(new RuntimeException("Operation interrupted: container stop timed out"));
+
+        mockMvc.perform(post("/api/teacher/stop-all"))
+                .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/initialize fails if stopAllActiveSessions throws, initializeCores not called")
+    void initialize_stopAllSessionsFails_initializeCoresNotCalled() throws Exception {
+        String json = """
+                {
+                    "totalStudents": 10,
+                    "coreNumbers": [1, 2, 3],
+                    "imageName": "my-lab-image"
+                }
+                """;
+
+        when(labSessionService.stopAllActiveSessions())
+                .thenThrow(new RuntimeException("Failed to stop containers"));
+
+        mockMvc.perform(post("/api/teacher/initialize")
+                        .contentType(APPLICATION_JSON)
+                        .content(json))
+                .andExpect(status().isInternalServerError());
+
+        verify(labSessionService).stopAllActiveSessions();
+        verifyNoInteractions(coreAllocationService);
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/stop-all returns partial failures when some containers fail to stop")
+    void stopAll_partialFailure_returnsFailedStudentIds() throws Exception {
+        when(labSessionService.stopAllActiveSessions()).thenReturn(
+                StopSessionsResult.builder()
+                        .totalSessions(5)
+                        .successfullyStoppedCount(3)
+                        .failedStudentIds(List.of("student2", "student4"))
+                        .build());
+
+        mockMvc.perform(post("/api/teacher/stop-all"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalSessions").value(5))
+                .andExpect(jsonPath("$.successfullyStoppedCount").value(3))
+                .andExpect(jsonPath("$.failedStudentIds").isArray())
+                .andExpect(jsonPath("$.failedStudentIds[0]").value("student2"))
+                .andExpect(jsonPath("$.failedStudentIds[1]").value("student4"))
+                .andExpect(jsonPath("$.allSuccessful").value(false));
     }
 }
