@@ -13,9 +13,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.lab.orchestrator.dto.StopSessionsResult;
+import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.service.CoreAllocationService;
 import com.lab.orchestrator.service.LabSessionService;
 import com.lab.orchestrator.exception.GlobalExceptionHandler;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -258,6 +260,50 @@ class TeacherLabControllerTest {
                 .andExpect(jsonPath("$.failedStudentIds[0]").value("student2"))
                 .andExpect(jsonPath("$.failedStudentIds[1]").value("student4"))
                 .andExpect(jsonPath("$.allSuccessful").value(false));
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/start/{studentId} with valid studentId calls service and returns 200 OK with LabSession")
+    void startStudent_validStudentId_callsServiceAndReturns200() throws Exception {
+        LabSession dummySession = new LabSession();
+        dummySession.setStudentId("student123");
+        dummySession.setAssignedPort(8080);
+        dummySession.setAssignedCore(1);
+        dummySession.setStartTime(LocalDateTime.now());
+
+        when(labSessionService.startSession("student123")).thenReturn(dummySession);
+
+        mockMvc.perform(post("/api/teacher/start/student123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.studentId").value("student123"))
+                .andExpect(jsonPath("$.assignedPort").value(8080))
+                .andExpect(jsonPath("$.assignedCore").value(1));
+
+        verify(labSessionService).startSession("student123");
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/start/{studentId} when lab not initialized returns 500")
+    void startStudent_labNotInitialized_returns500() throws Exception {
+        doThrow(new IllegalStateException("No cores available"))
+                .when(labSessionService).startSession("student123");
+
+        mockMvc.perform(post("/api/teacher/start/student123"))
+                .andExpect(status().isInternalServerError());
+
+        verify(labSessionService).startSession("student123");
+    }
+
+    @Test
+    @DisplayName("POST /api/teacher/start/{studentId} with invalid studentId returns 500")
+    void startStudent_invalidStudentId_returns500() throws Exception {
+        doThrow(new IllegalArgumentException("studentId must start with alphanumeric and contain only alphanumeric, underscore, or hyphen characters"))
+                .when(labSessionService).startSession("invalid@id");
+
+        mockMvc.perform(post("/api/teacher/start/invalid@id"))
+                .andExpect(status().isInternalServerError());
+
+        verify(labSessionService).startSession("invalid@id");
     }
 
     @Test

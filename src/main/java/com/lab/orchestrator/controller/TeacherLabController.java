@@ -2,6 +2,7 @@ package com.lab.orchestrator.controller;
 
 import com.lab.orchestrator.dto.LabInitializationRequest;
 import com.lab.orchestrator.dto.StopSessionsResult;
+import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.service.CoreAllocationService;
 import com.lab.orchestrator.service.LabSessionService;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,11 @@ public class TeacherLabController {
     @PostMapping("/stop-all")
     public StopSessionsResult stopAll() {
         return labSessionService.stopAllActiveSessions();
+    }
+
+    @PostMapping("/start/{studentId}")
+    public LabSession startStudent(@PathVariable String studentId) {
+        return labSessionService.startSession(studentId);
     }
 
     @PostMapping("/stop/{studentId}")
