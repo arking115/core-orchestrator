@@ -5,7 +5,10 @@ import com.lab.orchestrator.dto.StopSessionsResult;
 import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.service.CoreAllocationService;
 import com.lab.orchestrator.service.LabSessionService;
+import com.lab.orchestrator.service.ServerMetricsService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,6 +22,12 @@ public class TeacherLabController {
 
     private final CoreAllocationService coreAllocationService;
     private final LabSessionService labSessionService;
+    private final ServerMetricsService serverMetricsService;
+
+    @GetMapping("/server-capacity")
+    public ResponseEntity<Integer> getServerCapacity() {
+        return ResponseEntity.ok(serverMetricsService.getTotalServerCores());
+    }
 
     @PostMapping("/initialize")
     public void initialize(@RequestBody LabInitializationRequest request) {

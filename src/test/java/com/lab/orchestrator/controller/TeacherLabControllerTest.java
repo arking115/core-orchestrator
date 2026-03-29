@@ -8,7 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -16,7 +18,9 @@ import com.lab.orchestrator.dto.StopSessionsResult;
 import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.service.CoreAllocationService;
 import com.lab.orchestrator.service.LabSessionService;
+import com.lab.orchestrator.service.ServerMetricsService;
 import com.lab.orchestrator.exception.GlobalExceptionHandler;
+import com.lab.orchestrator.exception.RemoteServiceException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -42,6 +46,34 @@ class TeacherLabControllerTest {
 
     @MockBean
     private LabSessionService labSessionService;
+
+    @MockBean
+    private ServerMetricsService serverMetricsService;
+
+    @Test
+    @DisplayName("GET /api/teacher/server-capacity returns core count when SSH succeeds")
+    void getServerCapacity_success_returnsOkAndBody() throws Exception {
+        when(serverMetricsService.getTotalServerCores()).thenReturn(8);
+
+        mockMvc.perform(get("/api/teacher/server-capacity"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").value(8));
+
+        verify(serverMetricsService).getTotalServerCores();
+    }
+
+    @Test
+    @DisplayName("GET /api/teacher/server-capacity returns 503 when remote capacity query fails")
+    void getServerCapacity_failure_returnsServiceUnavailable() throws Exception {
+        when(serverMetricsService.getTotalServerCores())
+                .thenThrow(new RemoteServiceException("SSH failed"));
+
+        mockMvc.perform(get("/api/teacher/server-capacity"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().string("Remote server unavailable"));
+
+        verify(serverMetricsService).getTotalServerCores();
+    }
 
     @Test
     @DisplayName("POST /api/teacher/initialize with valid request calls initializeCores and returns 200 OK")

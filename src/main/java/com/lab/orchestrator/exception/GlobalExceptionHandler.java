@@ -29,6 +29,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.getMessage());
     }
 
+    @ExceptionHandler(RemoteServiceException.class)
+    public ResponseEntity<String> handleRemoteServiceException(RemoteServiceException ex) {
+        log.warn("Remote service unavailable: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body("Remote server unavailable");
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<String> handleRuntimeException(RuntimeException ex) {
         log.warn("Unexpected runtime exception: {}", ex.getMessage(), ex);
