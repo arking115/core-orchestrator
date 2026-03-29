@@ -1,15 +1,17 @@
 package com.lab.orchestrator;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.lab.orchestrator.exception.RemoteServiceException;
+import com.lab.orchestrator.dto.ServerCapacityResponse;
 import com.lab.orchestrator.service.CommandExecutionService;
 import com.lab.orchestrator.service.ServerMetricsService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -19,26 +21,68 @@ class ServerMetricsServiceTest {
     @Mock
     private CommandExecutionService commandExecutionService;
 
-    @InjectMocks
     private ServerMetricsService serverMetricsService;
 
+    @BeforeEach
+    void setUp() {
+        serverMetricsService = new ServerMetricsService(commandExecutionService);
+    }
+
     @Test
-    void getTotalServerCores_parsesTrimmedOutput() {
+    void initializeServerCapacity_parsesTrimmedNprocAndCaches() {
         when(commandExecutionService.executeCommand("nproc")).thenReturn("16\n");
-        assertEquals(16, serverMetricsService.getTotalServerCores());
+
+        serverMetricsService.initializeServerCapacity();
+
+        ServerCapacityResponse r = serverMetricsService.getServerCapacity();
+        assertEquals(16, r.cores());
+        assertEquals(true, r.reliable());
+        assertNull(r.message());
+        verify(commandExecutionService, times(1)).executeCommand("nproc");
     }
 
     @Test
-    void getTotalServerCores_invalidOutput_throws() {
+    void getServerCapacity_doesNotCallSshAgain() {
+        when(commandExecutionService.executeCommand("nproc")).thenReturn("4");
+
+        serverMetricsService.initializeServerCapacity();
+
+        ServerCapacityResponse first = serverMetricsService.getServerCapacity();
+        ServerCapacityResponse second = serverMetricsService.getServerCapacity();
+        assertEquals(4, first.cores());
+        assertEquals(4, second.cores());
+        assertEquals(true, first.reliable());
+        assertEquals(true, second.reliable());
+        assertNull(first.message());
+
+        verify(commandExecutionService, times(1)).executeCommand("nproc");
+    }
+
+    @Test
+    void initializeServerCapacity_invalidOutput_usesDefaultWithUnreliableFlag() {
         when(commandExecutionService.executeCommand("nproc")).thenReturn("not-a-number");
-        assertThrows(RemoteServiceException.class, () -> serverMetricsService.getTotalServerCores());
+
+        serverMetricsService.initializeServerCapacity();
+
+        ServerCapacityResponse r = serverMetricsService.getServerCapacity();
+        assertEquals(8, r.cores());
+        assertEquals(false, r.reliable());
+        assertEquals(
+                "Could not parse remote nproc output; using default capacity.",
+                r.message());
     }
 
     @Test
-    void getTotalServerCores_sshFailure_wrapsAsRemoteServiceException() {
+    void initializeServerCapacity_sshFailure_usesDefaultWithUnreliableFlag() {
         when(commandExecutionService.executeCommand("nproc")).thenThrow(new RuntimeException("connection refused"));
-        RemoteServiceException ex = assertThrows(
-                RemoteServiceException.class, () -> serverMetricsService.getTotalServerCores());
-        assertEquals("connection refused", ex.getCause().getMessage());
+
+        serverMetricsService.initializeServerCapacity();
+
+        ServerCapacityResponse r = serverMetricsService.getServerCapacity();
+        assertEquals(8, r.cores());
+        assertEquals(false, r.reliable());
+        assertEquals(
+                "Could not query remote server; using default capacity.",
+                r.message());
     }
 }

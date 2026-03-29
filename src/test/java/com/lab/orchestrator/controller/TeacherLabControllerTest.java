@@ -10,17 +10,16 @@ import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.lab.orchestrator.dto.ServerCapacityResponse;
 import com.lab.orchestrator.dto.StopSessionsResult;
 import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.service.CoreAllocationService;
 import com.lab.orchestrator.service.LabSessionService;
 import com.lab.orchestrator.service.ServerMetricsService;
 import com.lab.orchestrator.exception.GlobalExceptionHandler;
-import com.lab.orchestrator.exception.RemoteServiceException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -51,28 +50,60 @@ class TeacherLabControllerTest {
     private ServerMetricsService serverMetricsService;
 
     @Test
-    @DisplayName("GET /api/teacher/server-capacity returns core count when SSH succeeds")
-    void getServerCapacity_success_returnsOkAndBody() throws Exception {
-        when(serverMetricsService.getTotalServerCores()).thenReturn(8);
+    @DisplayName("GET /api/teacher/server-capacity returns cores and reliable=true when remote succeeded")
+    void getServerCapacity_remoteOk_returnsPayload() throws Exception {
+        when(serverMetricsService.getServerCapacity())
+                .thenReturn(new ServerCapacityResponse(16, true, null));
 
         mockMvc.perform(get("/api/teacher/server-capacity"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").value(8));
+                .andExpect(jsonPath("$.cores").value(16))
+                .andExpect(jsonPath("$.reliable").value(true))
+                .andExpect(jsonPath("$.message").doesNotExist());
 
-        verify(serverMetricsService).getTotalServerCores();
+        verify(serverMetricsService).getServerCapacity();
     }
 
     @Test
-    @DisplayName("GET /api/teacher/server-capacity returns 503 when remote capacity query fails")
-    void getServerCapacity_failure_returnsServiceUnavailable() throws Exception {
-        when(serverMetricsService.getTotalServerCores())
-                .thenThrow(new RemoteServiceException("SSH failed"));
+    @DisplayName("GET /api/teacher/server-capacity returns parse-failure message when not reliable")
+    void getServerCapacity_parseFallback_returnsPayload() throws Exception {
+        when(serverMetricsService.getServerCapacity())
+                .thenReturn(
+                        new ServerCapacityResponse(
+                                8,
+                                false,
+                                "Could not parse remote nproc output; using default capacity."));
 
         mockMvc.perform(get("/api/teacher/server-capacity"))
-                .andExpect(status().isServiceUnavailable())
-                .andExpect(content().string("Remote server unavailable"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cores").value(8))
+                .andExpect(jsonPath("$.reliable").value(false))
+                .andExpect(
+                        jsonPath("$.message")
+                                .value("Could not parse remote nproc output; using default capacity."));
 
-        verify(serverMetricsService).getTotalServerCores();
+        verify(serverMetricsService).getServerCapacity();
+    }
+
+    @Test
+    @DisplayName("GET /api/teacher/server-capacity returns reliable=false and message when using default")
+    void getServerCapacity_fallback_returnsPayload() throws Exception {
+        when(serverMetricsService.getServerCapacity())
+                .thenReturn(
+                        new ServerCapacityResponse(
+                                8,
+                                false,
+                                "Could not query remote server; using default capacity."));
+
+        mockMvc.perform(get("/api/teacher/server-capacity"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cores").value(8))
+                .andExpect(jsonPath("$.reliable").value(false))
+                .andExpect(
+                        jsonPath("$.message")
+                                .value("Could not query remote server; using default capacity."));
+
+        verify(serverMetricsService).getServerCapacity();
     }
 
     @Test

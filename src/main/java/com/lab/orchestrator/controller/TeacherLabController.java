@@ -1,6 +1,7 @@
 package com.lab.orchestrator.controller;
 
 import com.lab.orchestrator.dto.LabInitializationRequest;
+import com.lab.orchestrator.dto.ServerCapacityResponse;
 import com.lab.orchestrator.dto.StopSessionsResult;
 import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.service.CoreAllocationService;
@@ -25,8 +26,8 @@ public class TeacherLabController {
     private final ServerMetricsService serverMetricsService;
 
     @GetMapping("/server-capacity")
-    public ResponseEntity<Integer> getServerCapacity() {
-        return ResponseEntity.ok(serverMetricsService.getTotalServerCores());
+    public ResponseEntity<ServerCapacityResponse> getServerCapacity() {
+        return ResponseEntity.ok(serverMetricsService.getServerCapacity());
     }
 
     @PostMapping("/initialize")
