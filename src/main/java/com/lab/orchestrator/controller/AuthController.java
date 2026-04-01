@@ -2,6 +2,7 @@ package com.lab.orchestrator.controller;
 
 import com.lab.orchestrator.dto.AuthenticationRequest;
 import com.lab.orchestrator.dto.AuthenticationResponse;
+import com.lab.orchestrator.dto.RegisterRequest;
 import com.lab.orchestrator.service.AuthenticationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +21,11 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthenticationResponse> login(@RequestBody AuthenticationRequest request) {
         return ResponseEntity.ok(authenticationService.authenticate(request));
+    }
+
+    @PostMapping("/register")
+    public ResponseEntity<AuthenticationResponse> register(@RequestBody RegisterRequest request) {
+        return ResponseEntity.ok(authenticationService.register(request));
     }
 }
 

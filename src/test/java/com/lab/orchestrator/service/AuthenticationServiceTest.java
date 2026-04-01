@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.lab.orchestrator.dto.AuthenticationRequest;
 import com.lab.orchestrator.dto.AuthenticationResponse;
+import com.lab.orchestrator.dto.RegisterRequest;
 import com.lab.orchestrator.model.Role;
 import com.lab.orchestrator.model.User;
 import com.lab.orchestrator.repository.UserRepository;
@@ -25,6 +26,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @ExtendWith(MockitoExtension.class)
 class AuthenticationServiceTest {
@@ -40,6 +42,9 @@ class AuthenticationServiceTest {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private PasswordEncoder passwordEncoder;
 
     @Test
     void authenticate_ValidCredentials_ReturnsToken() {
@@ -89,6 +94,41 @@ class AuthenticationServiceTest {
 
         verify(authenticationManager, times(1)).authenticate(any(Authentication.class));
         verify(jwtService, never()).generateToken(any());
+    }
+
+    @Test
+    void register_NewUser_ReturnsToken() {
+        RegisterRequest request = new RegisterRequest("newuser", "pw", Role.ROLE_STUDENT);
+
+        when(userRepository.existsByUsername("newuser")).thenReturn(false);
+        when(passwordEncoder.encode("pw")).thenReturn("hashed");
+
+        User saved =
+                User.builder()
+                        .id(99L)
+                        .username("newuser")
+                        .password("hashed")
+                        .role(Role.ROLE_STUDENT)
+                        .build();
+
+        when(userRepository.save(any(User.class))).thenReturn(saved);
+        when(jwtService.generateToken(saved)).thenReturn("jwt-token-123");
+
+        AuthenticationResponse response = authenticationService.register(request);
+
+        assertEquals("jwt-token-123", response.token());
+        verify(jwtService, times(1)).generateToken(saved);
+    }
+
+    @Test
+    void register_DuplicateUsername_ThrowsException() {
+        RegisterRequest request = new RegisterRequest("dupe", "pw", Role.ROLE_STUDENT);
+        when(userRepository.existsByUsername("dupe")).thenReturn(true);
+
+        assertThrows(IllegalArgumentException.class, () -> authenticationService.register(request));
+
+        verify(userRepository, never()).save(any());
+        verifyNoInteractions(jwtService);
     }
 }
 

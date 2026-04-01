@@ -10,12 +10,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lab.orchestrator.dto.AuthenticationRequest;
 import com.lab.orchestrator.dto.AuthenticationResponse;
+import com.lab.orchestrator.dto.RegisterRequest;
 import com.lab.orchestrator.exception.GlobalExceptionHandler;
 import com.lab.orchestrator.repository.UserRepository;
 import com.lab.orchestrator.security.JwtAuthenticationFilter;
 import com.lab.orchestrator.security.JwtService;
 import com.lab.orchestrator.security.SecurityConfig;
 import com.lab.orchestrator.service.AuthenticationService;
+import com.lab.orchestrator.model.Role;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -78,6 +80,21 @@ class AuthControllerTest {
                                 .contentType(APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void register_ValidRequest_Returns200AndToken() throws Exception {
+        when(authenticationService.register(any()))
+                .thenReturn(new AuthenticationResponse("dummy-jwt-token"));
+
+        RegisterRequest request = new RegisterRequest("newuser", "pw", Role.ROLE_STUDENT);
+
+        mockMvc.perform(
+                        post("/api/auth/register")
+                                .contentType(APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").value("dummy-jwt-token"));
     }
 }
 
