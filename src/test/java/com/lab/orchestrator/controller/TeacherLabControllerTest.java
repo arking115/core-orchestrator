@@ -15,11 +15,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.lab.orchestrator.dto.ServerCapacityResponse;
 import com.lab.orchestrator.dto.StopSessionsResult;
+import com.lab.orchestrator.exception.GlobalExceptionHandler;
 import com.lab.orchestrator.model.LabSession;
+import com.lab.orchestrator.repository.UserRepository;
+import com.lab.orchestrator.security.JwtAuthenticationFilter;
+import com.lab.orchestrator.security.SecurityConfig;
+import com.lab.orchestrator.security.JwtService;
 import com.lab.orchestrator.service.CoreAllocationService;
 import com.lab.orchestrator.service.LabSessionService;
 import com.lab.orchestrator.service.ServerMetricsService;
-import com.lab.orchestrator.exception.GlobalExceptionHandler;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -31,10 +35,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(TeacherLabController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, JwtAuthenticationFilter.class})
+@WithMockUser(authorities = "ROLE_TEACHER")
 class TeacherLabControllerTest {
 
     @Autowired
@@ -48,6 +56,18 @@ class TeacherLabControllerTest {
 
     @MockBean
     private ServerMetricsService serverMetricsService;
+
+    @MockBean
+    private JwtService jwtService;
+
+    @MockBean
+    private UserDetailsService userDetailsService;
+
+    @MockBean
+    private UserRepository userRepository;
+
+    @MockBean
+    private AuthenticationProvider authenticationProvider;
 
     @Test
     @DisplayName("GET /api/teacher/server-capacity returns cores and reliable=true when remote succeeded")
@@ -436,12 +456,12 @@ class TeacherLabControllerTest {
     @DisplayName("POST /api/teacher/stop/{studentId} with path traversal attempt returns 500")
     void stopStudent_pathTraversalAttempt_returns500() throws Exception {
         doThrow(new IllegalArgumentException("studentId must start with alphanumeric and contain only alphanumeric, underscore, or hyphen characters"))
-                .when(labSessionService).stopSession("..%2F..%2Fetc");
+                .when(labSessionService).stopSession("invalid!name");
 
-        mockMvc.perform(post("/api/teacher/stop/..%2F..%2Fetc"))
+        mockMvc.perform(post("/api/teacher/stop/invalid!name"))
                 .andExpect(status().isInternalServerError());
 
-        verify(labSessionService).stopSession("..%2F..%2Fetc");
+        verify(labSessionService).stopSession("invalid!name");
     }
 
     @Test

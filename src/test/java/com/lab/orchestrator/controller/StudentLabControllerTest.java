@@ -15,6 +15,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.lab.orchestrator.dto.LabStartRequest;
 import com.lab.orchestrator.exception.GlobalExceptionHandler;
 import com.lab.orchestrator.model.LabSession;
+import com.lab.orchestrator.repository.UserRepository;
+import com.lab.orchestrator.security.JwtAuthenticationFilter;
+import com.lab.orchestrator.security.SecurityConfig;
+import com.lab.orchestrator.security.JwtService;
 import com.lab.orchestrator.service.LabSessionService;
 import java.time.LocalDateTime;
 import org.junit.jupiter.api.DisplayName;
@@ -23,10 +27,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(StudentLabController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, SecurityConfig.class, JwtAuthenticationFilter.class})
+@WithMockUser(authorities = "ROLE_STUDENT")
 class StudentLabControllerTest {
 
     @Autowired
@@ -37,6 +45,18 @@ class StudentLabControllerTest {
 
     @MockBean
     private LabSessionService labSessionService;
+
+    @MockBean
+    private JwtService jwtService;
+
+    @MockBean
+    private UserDetailsService userDetailsService;
+
+    @MockBean
+    private UserRepository userRepository;
+
+    @MockBean
+    private AuthenticationProvider authenticationProvider;
 
     @Test
     @DisplayName("POST /api/student/start with valid request returns 200 OK and session JSON")
