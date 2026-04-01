@@ -1,11 +1,13 @@
 package com.lab.orchestrator.security;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.util.AntPathMatcher;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -20,6 +22,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UserDetailsService userDetailsService;
+    private final AntPathMatcher pathMatcher = new AntPathMatcher();
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        // Auth endpoints are permitAll; skipping JWT parsing avoids noisy errors when clients
+        // accidentally send malformed/old tokens.
+        return pathMatcher.match("/api/auth/**", request.getServletPath());
+    }
 
     @Override
     protected void doFilterInternal(
@@ -33,18 +43,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String jwt = authHeader.substring(7);
-        String username = jwtService.extractUsername(jwt);
+        final String username;
+        try {
+            username = jwtService.extractUsername(jwt);
+        } catch (JwtException | IllegalArgumentException ex) {
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            return;
+        }
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UserDetails userDetails = this.userDetailsService.loadUserByUsername(username);
 
-            if (jwtService.isTokenValid(jwt, userDetails)) {
-                UsernamePasswordAuthenticationToken authToken =
-                        new UsernamePasswordAuthenticationToken(
-                                userDetails, null, userDetails.getAuthorities());
-                authToken.setDetails(
-                        new WebAuthenticationDetailsSource().buildDetails(request));
-                SecurityContextHolder.getContext().setAuthentication(authToken);
+            try {
+                if (jwtService.isTokenValid(jwt, userDetails)) {
+                    UsernamePasswordAuthenticationToken authToken =
+                            new UsernamePasswordAuthenticationToken(
+                                    userDetails, null, userDetails.getAuthorities());
+                    authToken.setDetails(
+                            new WebAuthenticationDetailsSource().buildDetails(request));
+                    SecurityContextHolder.getContext().setAuthentication(authToken);
+                }
+            } catch (JwtException | IllegalArgumentException ex) {
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                return;
             }
         }
 

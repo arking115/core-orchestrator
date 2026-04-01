@@ -21,6 +21,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> handleIllegalArgumentException(IllegalArgumentException ex) {
         log.warn("Illegal argument: {}", ex.getMessage(), ex);
+        if ("Username already taken".equals(ex.getMessage())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
+        }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.getMessage());
     }
 
