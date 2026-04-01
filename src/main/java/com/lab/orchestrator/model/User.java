@@ -36,6 +36,10 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private String password;
 
+    /** Lab handle for students only; null for teachers (control plane accounts). */
+    @Column(unique = true, name = "student_id")
+    private String studentId;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private Role role;

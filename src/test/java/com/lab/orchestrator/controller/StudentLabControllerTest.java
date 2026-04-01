@@ -11,16 +11,17 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.lab.orchestrator.dto.LabStartRequest;
 import com.lab.orchestrator.exception.GlobalExceptionHandler;
 import com.lab.orchestrator.model.LabSession;
+import com.lab.orchestrator.model.Role;
+import com.lab.orchestrator.model.User;
 import com.lab.orchestrator.repository.UserRepository;
 import com.lab.orchestrator.security.JwtAuthenticationFilter;
-import com.lab.orchestrator.security.SecurityConfig;
 import com.lab.orchestrator.security.JwtService;
+import com.lab.orchestrator.security.SecurityConfig;
 import com.lab.orchestrator.service.LabSessionService;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,14 +35,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(StudentLabController.class)
 @Import({GlobalExceptionHandler.class, SecurityConfig.class, JwtAuthenticationFilter.class})
-@WithMockUser(authorities = "ROLE_STUDENT")
+@WithMockUser(username = "student@school.ro", authorities = "ROLE_STUDENT")
 class StudentLabControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
-
-    @Autowired
-    private ObjectMapper objectMapper;
 
     @MockBean
     private LabSessionService labSessionService;
@@ -58,9 +56,21 @@ class StudentLabControllerTest {
     @MockBean
     private AuthenticationProvider authenticationProvider;
 
+    private User studentUser() {
+        return User.builder()
+                .id(1L)
+                .username("student@school.ro")
+                .password("pw")
+                .role(Role.ROLE_STUDENT)
+                .studentId("student123")
+                .build();
+    }
+
     @Test
-    @DisplayName("POST /api/student/start with valid request returns 200 OK and session JSON")
+    @DisplayName("POST /api/student/start returns 200 OK and session JSON (handle from authenticated user)")
     void start_validRequest_returns200AndSessionDetails() throws Exception {
+        when(userRepository.findByUsername("student@school.ro")).thenReturn(Optional.of(studentUser()));
+
         LabSession session = new LabSession();
         session.setStudentId("student123");
         session.setAssignedPort(30005);
@@ -69,13 +79,7 @@ class StudentLabControllerTest {
 
         when(labSessionService.startSession(eq("student123"))).thenReturn(session);
 
-        LabStartRequest request = new LabStartRequest();
-        request.setStudentId("student123");
-        String requestJson = objectMapper.writeValueAsString(request);
-
-        mockMvc.perform(post("/api/student/start")
-                        .contentType(APPLICATION_JSON)
-                        .content(requestJson))
+        mockMvc.perform(post("/api/student/start").contentType(APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.studentId").value("student123"))
                 .andExpect(jsonPath("$.assignedPort").value(30005))
@@ -86,31 +90,14 @@ class StudentLabControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/student/start with malformed JSON returns 400 and does not call service")
-    void start_malformedJson_returnsBadRequestAndDoesNotCallService() throws Exception {
-        String malformedJson = "{ \"studentId\": \"student123\"";
-
-        mockMvc.perform(post("/api/student/start")
-                        .contentType(APPLICATION_JSON)
-                        .content(malformedJson))
-                .andExpect(status().isBadRequest());
-
-        verifyNoInteractions(labSessionService);
-    }
-
-    @Test
     @DisplayName("POST /api/student/start when lab not initialized returns 500 (GlobalExceptionHandler)")
     void start_uninitializedLab_returns500() throws Exception {
-        LabStartRequest request = new LabStartRequest();
-        request.setStudentId("student123");
-        String requestJson = objectMapper.writeValueAsString(request);
+        when(userRepository.findByUsername("student@school.ro")).thenReturn(Optional.of(studentUser()));
 
         doThrow(new IllegalStateException("No lab config. Call initializeCores first."))
                 .when(labSessionService).startSession(eq("student123"));
 
-        mockMvc.perform(post("/api/student/start")
-                        .contentType(APPLICATION_JSON)
-                        .content(requestJson))
+        mockMvc.perform(post("/api/student/start").contentType(APPLICATION_JSON))
                 .andExpect(status().isInternalServerError())
                 .andExpect(content().string("No lab config. Call initializeCores first."));
     }
@@ -118,16 +105,12 @@ class StudentLabControllerTest {
     @Test
     @DisplayName("POST /api/student/start when at capacity returns 500 (GlobalExceptionHandler)")
     void start_atCapacity_returns500() throws Exception {
-        LabStartRequest request = new LabStartRequest();
-        request.setStudentId("student123");
-        String requestJson = objectMapper.writeValueAsString(request);
+        when(userRepository.findByUsername("student@school.ro")).thenReturn(Optional.of(studentUser()));
 
         doThrow(new IllegalStateException("At capacity: cannot allocate more students."))
                 .when(labSessionService).startSession(eq("student123"));
 
-        mockMvc.perform(post("/api/student/start")
-                        .contentType(APPLICATION_JSON)
-                        .content(requestJson))
+        mockMvc.perform(post("/api/student/start").contentType(APPLICATION_JSON))
                 .andExpect(status().isInternalServerError())
                 .andExpect(content().string("At capacity: cannot allocate more students."));
     }
@@ -135,16 +118,12 @@ class StudentLabControllerTest {
     @Test
     @DisplayName("POST /api/student/start when infrastructure fails returns 500 without leaking details")
     void start_infrastructureFailure_returns500WithoutSensitiveDetails() throws Exception {
-        LabStartRequest request = new LabStartRequest();
-        request.setStudentId("student123");
-        String requestJson = objectMapper.writeValueAsString(request);
+        when(userRepository.findByUsername("student@school.ro")).thenReturn(Optional.of(studentUser()));
 
         doThrow(new RuntimeException("Docker command failed"))
                 .when(labSessionService).startSession(eq("student123"));
 
-        mockMvc.perform(post("/api/student/start")
-                        .contentType(APPLICATION_JSON)
-                        .content(requestJson))
+        mockMvc.perform(post("/api/student/start").contentType(APPLICATION_JSON))
                 .andExpect(status().isInternalServerError())
                 .andExpect(content().string("An unexpected error occurred."));
 
@@ -152,46 +131,45 @@ class StudentLabControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/student/stop with valid request calls service and returns 200 OK")
-    void stop_validRequest_callsServiceAndReturns200() throws Exception {
-        LabStartRequest request = new LabStartRequest();
-        request.setStudentId("student123");
-        String requestJson = objectMapper.writeValueAsString(request);
+    @DisplayName("POST /api/student/start when user has no studentId returns 400")
+    void start_missingStudentIdOnUser_returns400() throws Exception {
+        User noHandle =
+                User.builder()
+                        .id(1L)
+                        .username("student@school.ro")
+                        .password("pw")
+                        .role(Role.ROLE_STUDENT)
+                        .studentId(null)
+                        .build();
+        when(userRepository.findByUsername("student@school.ro")).thenReturn(Optional.of(noHandle));
 
-        mockMvc.perform(post("/api/student/stop")
-                        .contentType(APPLICATION_JSON)
-                        .content(requestJson))
+        mockMvc.perform(post("/api/student/start").contentType(APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string("Invalid studentId"));
+
+        verifyNoInteractions(labSessionService);
+    }
+
+    @Test
+    @DisplayName("POST /api/student/stop calls service and returns 200 OK")
+    void stop_validRequest_callsServiceAndReturns200() throws Exception {
+        when(userRepository.findByUsername("student@school.ro")).thenReturn(Optional.of(studentUser()));
+
+        mockMvc.perform(post("/api/student/stop").contentType(APPLICATION_JSON))
                 .andExpect(status().isOk());
 
         verify(labSessionService).stopSession("student123");
     }
 
     @Test
-    @DisplayName("POST /api/student/stop with malformed JSON returns 400 and does not call service")
-    void stop_malformedJson_returnsBadRequestAndDoesNotCallService() throws Exception {
-        String malformedJson = "{ \"studentId\": \"student123\"";
-
-        mockMvc.perform(post("/api/student/stop")
-                        .contentType(APPLICATION_JSON)
-                        .content(malformedJson))
-                .andExpect(status().isBadRequest());
-
-        verifyNoInteractions(labSessionService);
-    }
-
-    @Test
     @DisplayName("POST /api/student/stop when session not found returns 500")
     void stop_sessionNotFound_returns500() throws Exception {
-        LabStartRequest request = new LabStartRequest();
-        request.setStudentId("student123");
-        String requestJson = objectMapper.writeValueAsString(request);
+        when(userRepository.findByUsername("student@school.ro")).thenReturn(Optional.of(studentUser()));
 
         doThrow(new IllegalArgumentException("No active session found for student: student123"))
                 .when(labSessionService).stopSession(eq("student123"));
 
-        mockMvc.perform(post("/api/student/stop")
-                        .contentType(APPLICATION_JSON)
-                        .content(requestJson))
+        mockMvc.perform(post("/api/student/stop").contentType(APPLICATION_JSON))
                 .andExpect(status().isInternalServerError());
 
         verify(labSessionService).stopSession("student123");
@@ -200,87 +178,15 @@ class StudentLabControllerTest {
     @Test
     @DisplayName("POST /api/student/stop when Docker fails returns 500 without leaking details")
     void stop_dockerFailure_returns500WithoutSensitiveDetails() throws Exception {
-        LabStartRequest request = new LabStartRequest();
-        request.setStudentId("student123");
-        String requestJson = objectMapper.writeValueAsString(request);
+        when(userRepository.findByUsername("student@school.ro")).thenReturn(Optional.of(studentUser()));
 
         doThrow(new RuntimeException("Docker command failed"))
                 .when(labSessionService).stopSession(eq("student123"));
 
-        mockMvc.perform(post("/api/student/stop")
-                        .contentType(APPLICATION_JSON)
-                        .content(requestJson))
+        mockMvc.perform(post("/api/student/stop").contentType(APPLICATION_JSON))
                 .andExpect(status().isInternalServerError())
                 .andExpect(content().string("An unexpected error occurred."));
 
         verify(labSessionService).stopSession("student123");
-    }
-
-    @Test
-    @DisplayName("POST /api/student/stop with null studentId in body returns 500")
-    void stop_nullStudentIdInBody_returns500() throws Exception {
-        String requestJson = "{}";
-
-        doThrow(new IllegalArgumentException("studentId must not be null or blank"))
-                .when(labSessionService).stopSession(null);
-
-        mockMvc.perform(post("/api/student/stop")
-                        .contentType(APPLICATION_JSON)
-                        .content(requestJson))
-                .andExpect(status().isInternalServerError());
-    }
-
-    @Test
-    @DisplayName("POST /api/student/stop with blank studentId returns 500")
-    void stop_blankStudentId_returns500() throws Exception {
-        LabStartRequest request = new LabStartRequest();
-        request.setStudentId("   ");
-        String requestJson = objectMapper.writeValueAsString(request);
-
-        doThrow(new IllegalArgumentException("studentId must not be null or blank"))
-                .when(labSessionService).stopSession(eq("   "));
-
-        mockMvc.perform(post("/api/student/stop")
-                        .contentType(APPLICATION_JSON)
-                        .content(requestJson))
-                .andExpect(status().isInternalServerError());
-
-        verify(labSessionService).stopSession("   ");
-    }
-
-    @Test
-    @DisplayName("POST /api/student/start with invalid characters in studentId returns 500")
-    void start_invalidCharactersInStudentId_returns500() throws Exception {
-        LabStartRequest request = new LabStartRequest();
-        request.setStudentId("student;rm -rf /");
-        String requestJson = objectMapper.writeValueAsString(request);
-
-        doThrow(new IllegalArgumentException("studentId must start with alphanumeric and contain only alphanumeric, underscore, or hyphen characters"))
-                .when(labSessionService).startSession(eq("student;rm -rf /"));
-
-        mockMvc.perform(post("/api/student/start")
-                        .contentType(APPLICATION_JSON)
-                        .content(requestJson))
-                .andExpect(status().isInternalServerError());
-
-        verify(labSessionService).startSession("student;rm -rf /");
-    }
-
-    @Test
-    @DisplayName("POST /api/student/stop with path traversal attempt returns 500")
-    void stop_pathTraversalAttempt_returns500() throws Exception {
-        LabStartRequest request = new LabStartRequest();
-        request.setStudentId("../../../etc/passwd");
-        String requestJson = objectMapper.writeValueAsString(request);
-
-        doThrow(new IllegalArgumentException("studentId must start with alphanumeric and contain only alphanumeric, underscore, or hyphen characters"))
-                .when(labSessionService).stopSession(eq("../../../etc/passwd"));
-
-        mockMvc.perform(post("/api/student/stop")
-                        .contentType(APPLICATION_JSON)
-                        .content(requestJson))
-                .andExpect(status().isInternalServerError());
-
-        verify(labSessionService).stopSession("../../../etc/passwd");
     }
 }

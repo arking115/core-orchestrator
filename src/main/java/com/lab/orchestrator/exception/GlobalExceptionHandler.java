@@ -21,7 +21,19 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> handleIllegalArgumentException(IllegalArgumentException ex) {
         log.warn("Illegal argument: {}", ex.getMessage(), ex);
+        if ("Invalid studentId".equals(ex.getMessage())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
+        }
+        if ("StudentId must not be set for teacher accounts".equals(ex.getMessage())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
+        }
+        if ("StudentId is required for student accounts".equals(ex.getMessage())) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ex.getMessage());
+        }
         if ("Username already taken".equals(ex.getMessage())) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
+        }
+        if ("StudentId already taken".equals(ex.getMessage())) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
         }
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.getMessage());

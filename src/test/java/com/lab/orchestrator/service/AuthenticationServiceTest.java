@@ -55,6 +55,7 @@ class AuthenticationServiceTest {
                         .id(1L)
                         .username("dawg")
                         .password("hashed-password")
+                        .studentId("dawg-1")
                         .role(Role.ROLE_STUDENT)
                         .build();
 
@@ -98,9 +99,10 @@ class AuthenticationServiceTest {
 
     @Test
     void register_NewUser_ReturnsToken() {
-        RegisterRequest request = new RegisterRequest("newuser", "pw", Role.ROLE_STUDENT);
+        RegisterRequest request = new RegisterRequest("newuser", "pw", Role.ROLE_STUDENT, "newuser-1");
 
         when(userRepository.existsByUsername("newuser")).thenReturn(false);
+        when(userRepository.existsByStudentId("newuser-1")).thenReturn(false);
         when(passwordEncoder.encode("pw")).thenReturn("hashed");
 
         User saved =
@@ -108,6 +110,7 @@ class AuthenticationServiceTest {
                         .id(99L)
                         .username("newuser")
                         .password("hashed")
+                        .studentId("newuser-1")
                         .role(Role.ROLE_STUDENT)
                         .build();
 
@@ -122,11 +125,88 @@ class AuthenticationServiceTest {
 
     @Test
     void register_DuplicateUsername_ThrowsException() {
-        RegisterRequest request = new RegisterRequest("dupe", "pw", Role.ROLE_STUDENT);
+        RegisterRequest request = new RegisterRequest("dupe", "pw", Role.ROLE_STUDENT, "dupe-1");
         when(userRepository.existsByUsername("dupe")).thenReturn(true);
 
         assertThrows(IllegalArgumentException.class, () -> authenticationService.register(request));
 
+        verify(userRepository, never()).save(any());
+        verifyNoInteractions(jwtService);
+    }
+
+    @Test
+    void register_InvalidStudentId_ThrowsException() {
+        RegisterRequest request = new RegisterRequest("newuser", "pw", Role.ROLE_STUDENT, "Rus Alexandru");
+
+        when(userRepository.existsByUsername("newuser")).thenReturn(false);
+
+        assertThrows(IllegalArgumentException.class, () -> authenticationService.register(request));
+
+        verify(userRepository, never()).existsByStudentId(any());
+        verify(userRepository, never()).save(any());
+        verifyNoInteractions(jwtService);
+    }
+
+    @Test
+    void register_DuplicateStudentId_ThrowsException() {
+        RegisterRequest request = new RegisterRequest("newuser", "pw", Role.ROLE_STUDENT, "taken-id");
+
+        when(userRepository.existsByUsername("newuser")).thenReturn(false);
+        when(userRepository.existsByStudentId("taken-id")).thenReturn(true);
+
+        assertThrows(IllegalArgumentException.class, () -> authenticationService.register(request));
+
+        verify(userRepository, never()).save(any());
+        verifyNoInteractions(jwtService);
+    }
+
+    @Test
+    void register_TeacherWithoutStudentId_ReturnsToken() {
+        RegisterRequest request = new RegisterRequest("teacher@school.ro", "pw", Role.ROLE_TEACHER, null);
+
+        when(userRepository.existsByUsername("teacher@school.ro")).thenReturn(false);
+        when(passwordEncoder.encode("pw")).thenReturn("hashed");
+
+        User saved =
+                User.builder()
+                        .id(1L)
+                        .username("teacher@school.ro")
+                        .password("hashed")
+                        .studentId(null)
+                        .role(Role.ROLE_TEACHER)
+                        .build();
+
+        when(userRepository.save(any(User.class))).thenReturn(saved);
+        when(jwtService.generateToken(saved)).thenReturn("jwt-teacher");
+
+        AuthenticationResponse response = authenticationService.register(request);
+
+        assertEquals("jwt-teacher", response.token());
+        verify(userRepository, never()).existsByStudentId(any());
+    }
+
+    @Test
+    void register_TeacherWithStudentId_ThrowsException() {
+        RegisterRequest request =
+                new RegisterRequest("teacher@school.ro", "pw", Role.ROLE_TEACHER, "should-not-send");
+
+        when(userRepository.existsByUsername("teacher@school.ro")).thenReturn(false);
+
+        assertThrows(IllegalArgumentException.class, () -> authenticationService.register(request));
+
+        verify(userRepository, never()).save(any());
+        verifyNoInteractions(jwtService);
+    }
+
+    @Test
+    void register_StudentMissingStudentId_ThrowsException() {
+        RegisterRequest request = new RegisterRequest("stu@school.ro", "pw", Role.ROLE_STUDENT, null);
+
+        when(userRepository.existsByUsername("stu@school.ro")).thenReturn(false);
+
+        assertThrows(IllegalArgumentException.class, () -> authenticationService.register(request));
+
+        verify(userRepository, never()).existsByStudentId(any());
         verify(userRepository, never()).save(any());
         verifyNoInteractions(jwtService);
     }

@@ -87,7 +87,7 @@ class AuthControllerTest {
         when(authenticationService.register(any()))
                 .thenReturn(new AuthenticationResponse("dummy-jwt-token"));
 
-        RegisterRequest request = new RegisterRequest("newuser", "pw", Role.ROLE_STUDENT);
+        RegisterRequest request = new RegisterRequest("newuser", "pw", Role.ROLE_STUDENT, "newuser-1");
 
         mockMvc.perform(
                         post("/api/auth/register")
@@ -95,6 +95,21 @@ class AuthControllerTest {
                                 .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").value("dummy-jwt-token"));
+    }
+
+    @Test
+    void register_TeacherWithoutStudentId_Returns200AndToken() throws Exception {
+        when(authenticationService.register(any()))
+                .thenReturn(new AuthenticationResponse("teacher-jwt"));
+
+        RegisterRequest request = new RegisterRequest("teacher@school.ro", "pw", Role.ROLE_TEACHER, null);
+
+        mockMvc.perform(
+                        post("/api/auth/register")
+                                .contentType(APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").value("teacher-jwt"));
     }
 }
 
