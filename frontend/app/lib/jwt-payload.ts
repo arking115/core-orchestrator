@@ -1,3 +1,5 @@
+import { jwtDecode } from "jwt-decode";
+
 /**
  * Matches claims from {@code com.lab.orchestrator.security.JwtService}:
  * subject = username, custom claim {@code role} = Spring authority (e.g. ROLE_STUDENT).
@@ -18,12 +20,12 @@ function isOrchestratorRole(value: unknown): value is OrchestratorJwtRole {
   return typeof value === "string" && ROLES.includes(value as OrchestratorJwtRole);
 }
 
-function decodeJwtPayloadSegment(segment: string): unknown {
-  let base64 = segment.replace(/-/g, "+").replace(/_/g, "/");
-  while (base64.length % 4) base64 += "=";
-  const json = atob(base64);
-  return JSON.parse(json) as unknown;
-}
+/** Raw payload shape from our backend; other standard JWT fields are ignored. */
+type OrchestratorJwtPayload = {
+  sub?: string;
+  role?: unknown;
+  exp?: number;
+};
 
 export function isJwtExpired(expSeconds: number): boolean {
   return expSeconds * 1000 <= Date.now();
@@ -33,13 +35,7 @@ export function parseOrchestratorJwt(
   token: string,
 ): ParsedOrchestratorJwt | null {
   try {
-    const parts = token.split(".");
-    if (parts.length !== 3) return null;
-    const body = decodeJwtPayloadSegment(parts[1]);
-    if (body === null || typeof body !== "object" || Array.isArray(body)) {
-      return null;
-    }
-    const record = body as Record<string, unknown>;
+    const record = jwtDecode<OrchestratorJwtPayload>(token);
     const sub = record.sub;
     const role = record.role;
     const exp = record.exp;
