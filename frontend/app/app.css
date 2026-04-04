@@ -7,7 +7,7 @@
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
+  @apply min-h-full bg-transparent;
 
   @media (prefers-color-scheme: dark) {
     color-scheme: dark;

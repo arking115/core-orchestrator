@@ -1,17 +1,21 @@
 import type { Route } from "./+types/home";
-import { Welcome } from "../welcome/welcome";
+import { AuthLayout } from "~/components/auth/auth-layout";
+import { LoginForm } from "~/components/login-form";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "New React Router App" },
-    { name: "description", content: "Welcome to React Router!" },
+    { title: "Real-Time Linux Lab — Sign in" },
+    {
+      name: "description",
+      content: "Technical University of Cluj-Napoca — lab orchestrator",
+    },
   ];
 }
 
 export default function Home() {
   return (
-    <h1 className="text-3xl font-bold underline">
-      Hello world!
-    </h1>
-  )
+    <AuthLayout>
+      <LoginForm />
+    </AuthLayout>
+  );
 }
