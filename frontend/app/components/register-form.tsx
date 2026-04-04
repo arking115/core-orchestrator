@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { authInputClass, authLabelClass } from "~/components/auth/field-styles";
 import { IconLock, IconMail, IconUser } from "~/components/auth/icons";
+import { useAuth } from "~/contexts/auth-context";
 import { registerApi } from "~/lib/auth-api";
-import { setAuthToken } from "~/lib/auth-token";
+import { dashboardPathForRole } from "~/lib/jwt-payload";
 
 type RegisterTab = "student" | "teacher";
 
@@ -22,6 +23,7 @@ type TeacherFields = {
 
 export function RegisterForm() {
   const navigate = useNavigate();
+  const { signIn } = useAuth();
   const [tab, setTab] = useState<RegisterTab>("student");
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,8 +58,12 @@ export function RegisterForm() {
         role: "ROLE_STUDENT",
         studentId: student.studentId.trim(),
       });
-      setAuthToken(token);
-      navigate("/", { replace: true });
+      const role = signIn(token);
+      if (role) {
+        navigate(dashboardPathForRole(role), { replace: true });
+      } else {
+        setFormError("Invalid session token. Please try again.");
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Registration failed.");
     } finally {
@@ -82,8 +88,12 @@ export function RegisterForm() {
         role: "ROLE_TEACHER",
         studentId: null,
       });
-      setAuthToken(token);
-      navigate("/", { replace: true });
+      const role = signIn(token);
+      if (role) {
+        navigate(dashboardPathForRole(role), { replace: true });
+      } else {
+        setFormError("Invalid session token. Please try again.");
+      }
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Registration failed.");
     } finally {

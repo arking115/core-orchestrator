@@ -1,15 +1,14 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { authInputClass, authLabelClass } from "~/components/auth/field-styles";
 import { IconLock, IconMail } from "~/components/auth/icons";
+import { useAuth } from "~/contexts/auth-context";
 import { loginApi } from "~/lib/auth-api";
-import { setAuthToken } from "~/lib/auth-token";
+import { dashboardPathForRole } from "~/lib/jwt-payload";
 
-type LoginFormProps = {
-  onSignedIn: (token: string) => void;
-};
-
-export function LoginForm({ onSignedIn }: LoginFormProps) {
+export function LoginForm() {
+  const navigate = useNavigate();
+  const { signIn } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -21,8 +20,12 @@ export function LoginForm({ onSignedIn }: LoginFormProps) {
     setIsSubmitting(true);
     try {
       const { token } = await loginApi(email.trim(), password);
-      setAuthToken(token);
-      onSignedIn(token);
+      const role = signIn(token);
+      if (role) {
+        navigate(dashboardPathForRole(role), { replace: true });
+      } else {
+        setError("Invalid session token. Please try again.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed.");
     } finally {
