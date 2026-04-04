@@ -1,11 +1,9 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { authInputClass, authLabelClass } from "~/components/auth/field-styles";
 import { IconLock, IconMail, IconUser } from "~/components/auth/icons";
-import {
-  getStudentIdError,
-  getStudentRegistrationEmailError,
-} from "~/components/auth/validate-student-id";
+import { registerApi } from "~/lib/auth-api";
+import { setAuthToken } from "~/lib/auth-token";
 
 type RegisterTab = "student" | "teacher";
 
@@ -23,12 +21,10 @@ type TeacherFields = {
 };
 
 export function RegisterForm() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<RegisterTab>("student");
-  const [studentIdError, setStudentIdError] = useState<string | null>(null);
-  const [studentEmailError, setStudentEmailError] = useState<string | null>(
-    null,
-  );
   const [formError, setFormError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [student, setStudent] = useState<StudentFields>({
     studentId: "",
@@ -43,43 +39,33 @@ export function RegisterForm() {
     confirmPassword: "",
   });
 
-  function onStudentIdChange(value: string) {
-    setStudent((s) => ({ ...s, studentId: value }));
-    setStudentIdError(value ? getStudentIdError(value) : null);
-  }
-
-  function onStudentEmailChange(value: string) {
-    setStudent((s) => ({ ...s, email: value }));
-    setStudentEmailError(
-      getStudentRegistrationEmailError(value, { allowEmpty: true }),
-    );
-  }
-
-  function handleStudentSubmit(e: React.FormEvent) {
+  async function handleStudentSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
-
-    const idErr = getStudentIdError(student.studentId);
-    if (idErr) {
-      setStudentIdError(idErr);
-      return;
-    }
-
-    const emailErr = getStudentRegistrationEmailError(student.email);
-    if (emailErr) {
-      setStudentEmailError(emailErr);
-      return;
-    }
 
     if (student.password !== student.confirmPassword) {
       setFormError("Passwords do not match.");
       return;
     }
 
-    // Registration API will be wired here later (`POST /api/auth/register`).
+    setIsSubmitting(true);
+    try {
+      const { token } = await registerApi({
+        username: student.email.trim(),
+        password: student.password,
+        role: "ROLE_STUDENT",
+        studentId: student.studentId.trim(),
+      });
+      setAuthToken(token);
+      navigate("/", { replace: true });
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Registration failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  function handleTeacherSubmit(e: React.FormEvent) {
+  async function handleTeacherSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
 
@@ -88,7 +74,21 @@ export function RegisterForm() {
       return;
     }
 
-    // Registration API will be wired here later (`POST /api/auth/register`).
+    setIsSubmitting(true);
+    try {
+      const { token } = await registerApi({
+        username: teacher.email.trim(),
+        password: teacher.password,
+        role: "ROLE_TEACHER",
+        studentId: null,
+      });
+      setAuthToken(token);
+      navigate("/", { replace: true });
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Registration failed.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -157,23 +157,21 @@ export function RegisterForm() {
                 placeholder="john-doe-123"
                 className={authInputClass}
                 value={student.studentId}
-                onChange={(e) => onStudentIdChange(e.target.value)}
+                onChange={(e) =>
+                  setStudent((s) => ({ ...s, studentId: e.target.value }))
+                }
                 required
+                disabled={isSubmitting}
               />
             </div>
-            {studentIdError ? (
-              <p className="text-sm text-red-600 dark:text-red-400">
-                {studentIdError}
-              </p>
-            ) : null}
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Use lowercase letters, numbers, and hyphens only (e.g.,
-              john-doe-123).
+              Lowercase letters, numbers, and single hyphens between parts — for
+              example <span className="font-mono text-slate-600 dark:text-slate-300">john-doe-123</span>.
             </p>
           </div>
           <div className="space-y-2">
             <label htmlFor="student-email" className={authLabelClass}>
-              Email
+              Email (username)
             </label>
             <div className="relative">
               <IconMail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -185,22 +183,13 @@ export function RegisterForm() {
                 placeholder="your.name@student.utcluj.ro"
                 className={authInputClass}
                 value={student.email}
-                onChange={(e) => onStudentEmailChange(e.target.value)}
+                onChange={(e) =>
+                  setStudent((s) => ({ ...s, email: e.target.value }))
+                }
                 required
+                disabled={isSubmitting}
               />
             </div>
-            {studentEmailError ? (
-              <p className="text-sm text-red-600 dark:text-red-400">
-                {studentEmailError}
-              </p>
-            ) : null}
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Must be your official{" "}
-              <span className="font-medium text-slate-600 dark:text-slate-300">
-                @student.utcluj.ro
-              </span>{" "}
-              address.
-            </p>
           </div>
           <div className="space-y-2">
             <label htmlFor="student-password" className={authLabelClass}>
@@ -220,7 +209,7 @@ export function RegisterForm() {
                   setStudent((s) => ({ ...s, password: e.target.value }))
                 }
                 required
-                minLength={8}
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -248,23 +237,23 @@ export function RegisterForm() {
                   }))
                 }
                 required
-                minLength={8}
+                disabled={isSubmitting}
               />
             </div>
           </div>
           <button
             type="submit"
-            disabled={!!studentIdError || !!studentEmailError}
+            disabled={isSubmitting}
             className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-slate-950"
           >
-            Create Student Account
+            {isSubmitting ? "Creating account…" : "Create Student Account"}
           </button>
         </form>
       ) : (
         <form onSubmit={handleTeacherSubmit} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="teacher-email" className={authLabelClass}>
-              Email
+              Email (username)
             </label>
             <div className="relative">
               <IconMail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -280,6 +269,7 @@ export function RegisterForm() {
                   setTeacher((t) => ({ ...t, email: e.target.value }))
                 }
                 required
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -301,7 +291,7 @@ export function RegisterForm() {
                   setTeacher((t) => ({ ...t, password: e.target.value }))
                 }
                 required
-                minLength={8}
+                disabled={isSubmitting}
               />
             </div>
           </div>
@@ -329,15 +319,16 @@ export function RegisterForm() {
                   }))
                 }
                 required
-                minLength={8}
+                disabled={isSubmitting}
               />
             </div>
           </div>
           <button
             type="submit"
-            className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
+            disabled={isSubmitting}
+            className="w-full rounded-md bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 dark:focus-visible:ring-offset-slate-950"
           >
-            Create Teacher Account
+            {isSubmitting ? "Creating account…" : "Create Teacher Account"}
           </button>
         </form>
       )}
