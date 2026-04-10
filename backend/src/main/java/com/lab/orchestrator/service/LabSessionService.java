@@ -1,5 +1,6 @@
 package com.lab.orchestrator.service;
 
+import com.lab.orchestrator.dto.ActiveLabSessionResponse;
 import com.lab.orchestrator.dto.StopSessionsResult;
 import com.lab.orchestrator.model.CoreAllocation;
 import com.lab.orchestrator.model.LabSession;
@@ -74,6 +75,18 @@ public class LabSessionService {
 
         labSessionRepository.delete(session);
         log.info("Deleted session for student {}", studentId);
+    }
+
+    public List<ActiveLabSessionResponse> listActiveSessions() {
+        return labSessionRepository.findAll().stream()
+                .map(
+                        session ->
+                                new ActiveLabSessionResponse(
+                                        session.getStudentId(),
+                                        session.getAssignedCore(),
+                                        session.getAssignedPort(),
+                                        session.getStartTime()))
+                .toList();
     }
 
     public StopSessionsResult stopAllActiveSessions() {

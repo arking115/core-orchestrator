@@ -14,6 +14,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.lab.orchestrator.dto.ActiveLabSessionResponse;
 import com.lab.orchestrator.dto.StopSessionsResult;
 import com.lab.orchestrator.model.CoreAllocation;
 import com.lab.orchestrator.model.LabSession;
@@ -50,6 +51,44 @@ class LabSessionServiceTest {
 
     @InjectMocks
     private LabSessionService labSessionService;
+
+    @Test
+    @DisplayName("listActiveSessions returns empty list when repository has no rows")
+    void listActiveSessions_empty_returnsEmptyList() {
+        when(labSessionRepository.findAll()).thenReturn(Collections.emptyList());
+
+        List<ActiveLabSessionResponse> result = labSessionService.listActiveSessions();
+
+        assertTrue(result.isEmpty());
+        verify(labSessionRepository).findAll();
+    }
+
+    @Test
+    @DisplayName("listActiveSessions maps each LabSession row to ActiveLabSessionResponse")
+    void listActiveSessions_withRows_mapsFields() {
+        LocalDateTime t = LocalDateTime.of(2026, 4, 10, 12, 34, 56);
+        LabSession a = new LabSession();
+        a.setStudentId("s1");
+        a.setAssignedCore(1);
+        a.setAssignedPort(30001);
+        a.setStartTime(t);
+        LabSession b = new LabSession();
+        b.setStudentId("s2");
+        b.setAssignedCore(2);
+        b.setAssignedPort(30002);
+        b.setStartTime(t);
+        when(labSessionRepository.findAll()).thenReturn(List.of(a, b));
+
+        List<ActiveLabSessionResponse> result = labSessionService.listActiveSessions();
+
+        assertEquals(2, result.size());
+        assertEquals("s1", result.get(0).studentId());
+        assertEquals(1, result.get(0).assignedCore());
+        assertEquals(30001, result.get(0).assignedPort());
+        assertEquals(t, result.get(0).startTime());
+        assertEquals("s2", result.get(1).studentId());
+        verify(labSessionRepository).findAll();
+    }
 
     @Test
     @DisplayName("startSession returns existing LabSession when one already exists for the student")

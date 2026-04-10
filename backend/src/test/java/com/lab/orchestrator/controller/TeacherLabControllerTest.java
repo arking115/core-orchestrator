@@ -10,12 +10,15 @@ import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.lab.orchestrator.dto.ActiveLabSessionResponse;
 import com.lab.orchestrator.dto.ServerCapacityResponse;
 import com.lab.orchestrator.dto.StopSessionsResult;
 import com.lab.orchestrator.exception.GlobalExceptionHandler;
+import com.lab.orchestrator.exception.RemoteServiceException;
 import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.repository.UserRepository;
 import com.lab.orchestrator.security.JwtAuthenticationFilter;
@@ -68,6 +71,67 @@ class TeacherLabControllerTest {
 
     @MockBean
     private AuthenticationProvider authenticationProvider;
+
+    @Test
+    @DisplayName("GET /api/teacher/sessions returns empty array when no active sessions")
+    void getSessions_none_returnsEmptyArray() throws Exception {
+        when(labSessionService.listActiveSessions()).thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/api/teacher/sessions"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+
+        verify(labSessionService).listActiveSessions();
+    }
+
+    @Test
+    @DisplayName("GET /api/teacher/sessions returns active sessions with studentId, core, port, and startTime")
+    void getSessions_withSessions_returnsJsonArray() throws Exception {
+        LocalDateTime start = LocalDateTime.of(2026, 4, 10, 12, 34, 56);
+        when(labSessionService.listActiveSessions())
+                .thenReturn(
+                        List.of(
+                                new ActiveLabSessionResponse("student123", 1, 30001, start),
+                                new ActiveLabSessionResponse("student456", 2, 30002, start)));
+
+        mockMvc.perform(get("/api/teacher/sessions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].studentId").value("student123"))
+                .andExpect(jsonPath("$[0].assignedCore").value(1))
+                .andExpect(jsonPath("$[0].assignedPort").value(30001))
+                .andExpect(jsonPath("$[0].startTime").value("2026-04-10T12:34:56"))
+                .andExpect(jsonPath("$[1].studentId").value("student456"));
+
+        verify(labSessionService).listActiveSessions();
+    }
+
+    @Test
+    @DisplayName("GET /api/teacher/sessions when service throws RemoteServiceException returns 503")
+    void getSessions_remoteServiceException_returns503() throws Exception {
+        when(labSessionService.listActiveSessions())
+                .thenThrow(new RemoteServiceException("SSH connection failed"));
+
+        mockMvc.perform(get("/api/teacher/sessions"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(content().string("Remote server unavailable"));
+
+        verify(labSessionService).listActiveSessions();
+    }
+
+    @Test
+    @DisplayName("GET /api/teacher/sessions when service throws RuntimeException returns 500 with generic message")
+    void getSessions_runtimeException_returns500() throws Exception {
+        when(labSessionService.listActiveSessions())
+                .thenThrow(new RuntimeException("Database read failed"));
+
+        mockMvc.perform(get("/api/teacher/sessions"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().string("An unexpected error occurred."));
+
+        verify(labSessionService).listActiveSessions();
+    }
 
     @Test
     @DisplayName("GET /api/teacher/server-capacity returns cores and reliable=true when remote succeeded")

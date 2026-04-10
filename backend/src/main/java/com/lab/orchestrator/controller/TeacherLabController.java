@@ -1,5 +1,6 @@
 package com.lab.orchestrator.controller;
 
+import com.lab.orchestrator.dto.ActiveLabSessionResponse;
 import com.lab.orchestrator.dto.LabInitializationRequest;
 import com.lab.orchestrator.dto.ServerCapacityResponse;
 import com.lab.orchestrator.dto.StopSessionsResult;
@@ -16,6 +17,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/teacher")
 @RequiredArgsConstructor
@@ -28,6 +31,11 @@ public class TeacherLabController {
     @GetMapping("/server-capacity")
     public ResponseEntity<ServerCapacityResponse> getServerCapacity() {
         return ResponseEntity.ok(serverMetricsService.getServerCapacity());
+    }
+
+    @GetMapping("/sessions")
+    public List<ActiveLabSessionResponse> listActiveSessions() {
+        return labSessionService.listActiveSessions();
     }
 
     @PostMapping("/initialize")
