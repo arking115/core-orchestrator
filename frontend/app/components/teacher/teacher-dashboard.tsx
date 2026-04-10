@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { authInputPlainClass, authLabelClass } from "~/components/auth/field-styles";
+import { authInputClass, authInputPlainClass, authLabelClass } from "~/components/auth/field-styles";
 import {
   IconActivity,
+  IconPlay,
+  IconSearch,
   IconSettings,
   IconSquare,
   IconTerminal,
@@ -13,7 +15,12 @@ import {
   getServerCapacity,
   initializeLab,
   isTeacherLabApiError,
+  isValidStudentId,
+  listActiveSessions,
+  startStudentSession,
   stopAllSessions,
+  stopStudentSession,
+  type ActiveLabSessionResponse,
 } from "~/lib/teacher-lab-api";
 
 const cardClass =
@@ -62,9 +69,32 @@ export function TeacherDashboard({ username, onSignOut }: TeacherDashboardProps)
 
   const [isStoppingAll, setIsStoppingAll] = useState(false);
 
+  const [sessions, setSessions] = useState<ActiveLabSessionResponse[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [newStudentId, setNewStudentId] = useState("");
+  const [newStudentIdHint, setNewStudentIdHint] = useState<string | null>(null);
+  const [startingId, setStartingId] = useState(false);
+  const [stoppingId, setStoppingId] = useState<string | null>(null);
+
   const coreButtonCount = Math.min(FALLBACK_CORE_DISPLAY, Math.max(1, coreLimit));
 
   const dismissFeedback = useCallback(() => setFeedback(null), []);
+
+  const loadSessions = useCallback(async () => {
+    setSessionsLoading(true);
+    setSessionsError(null);
+    try {
+      const list = await listActiveSessions();
+      setSessions(Array.isArray(list) ? list : []);
+    } catch (e: unknown) {
+      setSessions([]);
+      setSessionsError(formatApiError(e));
+    } finally {
+      setSessionsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!feedback || feedback.kind !== "success") return;
@@ -106,6 +136,11 @@ export function TeacherDashboard({ username, onSignOut }: TeacherDashboardProps)
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!labInitialized || activeTab !== "active") return;
+    void loadSessions();
+  }, [labInitialized, activeTab, loadSessions]);
 
   function toggleCore(coreNumber: number) {
     setSelectedCores((prev) =>
@@ -188,12 +223,60 @@ export function TeacherDashboard({ username, onSignOut }: TeacherDashboardProps)
         kind: allOk ? "success" : "warning",
         message: `Stopped ${result.successfullyStoppedCount} of ${result.totalSessions} session(s).${failed}`,
       });
+      await loadSessions();
     } catch (e) {
       setFeedback({ kind: "error", message: formatApiError(e) });
     } finally {
       setIsStoppingAll(false);
     }
   }
+
+  async function handleStartFromForm() {
+    const id = newStudentId.trim();
+    if (!isValidStudentId(id)) {
+      setNewStudentIdHint(
+        "Use 1–64 characters: start with a letter or number; then letters, numbers, underscores, or hyphens only.",
+      );
+      return;
+    }
+    setNewStudentIdHint(null);
+    setStartingId(true);
+    setFeedback(null);
+    try {
+      await startStudentSession(id);
+      setNewStudentId("");
+      setFeedback({
+        kind: "success",
+        message: `Started lab for ${id}.`,
+      });
+      await loadSessions();
+    } catch (e) {
+      setFeedback({ kind: "error", message: formatApiError(e) });
+    } finally {
+      setStartingId(false);
+    }
+  }
+
+  async function handleStopStudent(studentId: string) {
+    setStoppingId(studentId);
+    setFeedback(null);
+    try {
+      await stopStudentSession(studentId);
+      setFeedback({
+        kind: "success",
+        message: `Stopped lab for ${studentId}.`,
+      });
+      await loadSessions();
+    } catch (e) {
+      setFeedback({ kind: "error", message: formatApiError(e) });
+    } finally {
+      setStoppingId(null);
+    }
+  }
+
+  const filteredSessions = sessions.filter((s) =>
+    s.studentId.toLowerCase().includes(searchQuery.toLowerCase()),
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
@@ -430,34 +513,164 @@ export function TeacherDashboard({ username, onSignOut }: TeacherDashboardProps)
                     Student sessions
                   </h2>
                   <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Per-student session list and actions will connect here once the backend exposes a
-                    sessions listing API. Stop all still stops every active session on the server.
+                    Active containers from{" "}
+                    <code className="rounded bg-slate-100 px-1 py-0.5 text-slate-800 dark:bg-slate-800 dark:text-slate-200">
+                      GET /api/teacher/sessions
+                    </code>
+                    . Start a session, stop one, or stop all on the server.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className={smOutlineButtonClass}
-                  disabled={isStoppingAll}
-                  onClick={handleStopAll}
-                >
-                  <IconSquare className="h-3 w-3" aria-hidden />
-                  {isStoppingAll ? "Stopping…" : "Stop all"}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={outlineButtonClass}
+                    disabled={sessionsLoading}
+                    onClick={() => void loadSessions()}
+                  >
+                    {sessionsLoading ? "Refreshing…" : "Refresh"}
+                  </button>
+                  <button
+                    type="button"
+                    className={smOutlineButtonClass}
+                    disabled={isStoppingAll}
+                    onClick={() => void handleStopAll()}
+                  >
+                    <IconSquare className="h-3 w-3" aria-hidden />
+                    {isStoppingAll ? "Stopping…" : "Stop all"}
+                  </button>
+                </div>
               </div>
               <div className="space-y-4 px-6 py-6">
-                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/50 px-4 py-10 text-center dark:border-slate-600 dark:bg-slate-900/30">
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Session list not wired yet — waiting on a backend endpoint to list active lab
-                    sessions. The{" "}
-                    <code className="rounded bg-slate-200 px-1 py-0.5 text-slate-800 dark:bg-slate-800 dark:text-slate-200">
-                      POST /api/teacher/start
-                    </code>{" "}
-                    and{" "}
-                    <code className="rounded bg-slate-200 px-1 py-0.5 text-slate-800 dark:bg-slate-800 dark:text-slate-200">
-                      POST /api/teacher/stop
-                    </code>{" "}
-                    routes exist; the UI will call them once listing is available.
+                <div className="rounded-lg border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-900/40">
+                  <p className={`${authLabelClass} mb-2`}>Start a session</p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <input
+                        id="new-student-id"
+                        type="text"
+                        autoComplete="off"
+                        placeholder="e.g. student-123"
+                        className={authInputPlainClass}
+                        value={newStudentId}
+                        onChange={(e) => {
+                          setNewStudentId(e.target.value);
+                          setNewStudentIdHint(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void handleStartFromForm();
+                        }}
+                      />
+                      {newStudentIdHint ? (
+                        <p className="text-xs text-red-600 dark:text-red-400">{newStudentIdHint}</p>
+                      ) : (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          Same rules as the backend (alphanumeric start; then letters, numbers, _, -).
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className={`${primaryButtonClass} shrink-0 px-4`}
+                      disabled={startingId || sessionsLoading}
+                      onClick={() => void handleStartFromForm()}
+                    >
+                      <IconPlay className="h-4 w-4" aria-hidden />
+                      {startingId ? "Starting…" : "Start"}
+                    </button>
+                  </div>
+                </div>
+
+                {sessionsError ? (
+                  <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100">
+                    {sessionsError}
                   </p>
+                ) : null}
+
+                <div className="relative">
+                  <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="search"
+                    placeholder="Filter by student ID…"
+                    className={authInputClass}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    aria-label="Filter sessions"
+                  />
+                </div>
+
+                <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+                  <table className="w-full min-w-[640px] text-left text-sm">
+                    <thead className="border-b border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/50 dark:text-slate-300">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">Student ID</th>
+                        <th className="px-4 py-3 font-medium">Core</th>
+                        <th className="px-4 py-3 font-medium">Assigned port</th>
+                        <th className="px-4 py-3 font-medium">Started</th>
+                        <th className="px-4 py-3 font-medium">Status</th>
+                        <th className="px-4 py-3 text-right font-medium">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                      {sessionsLoading && sessions.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="px-4 py-8 text-center text-slate-500 dark:text-slate-400"
+                          >
+                            Loading sessions…
+                          </td>
+                        </tr>
+                      ) : filteredSessions.length > 0 ? (
+                        filteredSessions.map((row) => (
+                          <tr key={row.studentId}>
+                            <td className="px-4 py-3 font-medium text-slate-900 dark:text-slate-100">
+                              {row.studentId}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex rounded-md border border-blue-200 bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800 dark:border-blue-900/50 dark:bg-blue-950/60 dark:text-blue-200">
+                                Core {row.assignedCore}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 font-mono text-slate-800 dark:text-slate-200">
+                              {row.assignedPort}
+                            </td>
+                            <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
+                              {row.startTime}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="inline-flex rounded-md border border-green-200 bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:border-green-900/50 dark:bg-green-950/60 dark:text-green-200">
+                                Running
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                type="button"
+                                className={smOutlineButtonClass}
+                                disabled={stoppingId !== null || sessionsLoading}
+                                onClick={() => void handleStopStudent(row.studentId)}
+                              >
+                                <IconSquare className="h-3 w-3" aria-hidden />
+                                {stoppingId === row.studentId ? "Stopping…" : "Stop"}
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="px-4 py-8 text-center text-slate-500 dark:text-slate-400"
+                          >
+                            {sessionsError
+                              ? "—"
+                              : sessions.length === 0
+                                ? "No active sessions. Start one above or refresh after students connect."
+                                : `No sessions match “${searchQuery}”.`}
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

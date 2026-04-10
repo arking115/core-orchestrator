@@ -17,6 +17,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.lab.orchestrator.dto.ActiveLabSessionResponse;
 import com.lab.orchestrator.dto.ServerCapacityResponse;
 import com.lab.orchestrator.dto.StopSessionsResult;
+import com.lab.orchestrator.model.Role;
+import com.lab.orchestrator.model.User;
 import com.lab.orchestrator.exception.GlobalExceptionHandler;
 import com.lab.orchestrator.exception.RemoteServiceException;
 import com.lab.orchestrator.model.LabSession;
@@ -82,6 +84,49 @@ class TeacherLabControllerTest {
                 .andExpect(content().json("[]"));
 
         verify(labSessionService).listActiveSessions();
+    }
+
+    @Test
+    @DisplayName("GET /api/teacher/students returns empty array when no students exist")
+    void getStudents_none_returnsEmptyArray() throws Exception {
+        when(userRepository.findAllByRole(Role.ROLE_STUDENT)).thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/api/teacher/students"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+
+        verify(userRepository).findAllByRole(Role.ROLE_STUDENT);
+    }
+
+    @Test
+    @DisplayName("GET /api/teacher/students returns stable list of studentId + displayName")
+    void getStudents_withStudents_returnsJsonArray() throws Exception {
+        User a = User.builder().id(1L).username("u1").password("x").role(Role.ROLE_STUDENT).studentId("john-doe-123").build();
+        User b = User.builder().id(2L).username("u2").password("x").role(Role.ROLE_STUDENT).studentId("alex-test-1").build();
+        when(userRepository.findAllByRole(Role.ROLE_STUDENT)).thenReturn(List.of(a, b));
+
+        mockMvc.perform(get("/api/teacher/students"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                // sorted by studentId for stable ordering
+                .andExpect(jsonPath("$[0].studentId").value("alex-test-1"))
+                .andExpect(jsonPath("$[0].displayName").value("alex-test-1"))
+                .andExpect(jsonPath("$[1].studentId").value("john-doe-123"))
+                .andExpect(jsonPath("$[1].displayName").value("john-doe-123"));
+
+        verify(userRepository).findAllByRole(Role.ROLE_STUDENT);
+    }
+
+    @Test
+    @DisplayName("GET /api/teacher/students when repository throws RuntimeException returns 500 with generic message")
+    void getStudents_runtimeException_returns500() throws Exception {
+        when(userRepository.findAllByRole(Role.ROLE_STUDENT)).thenThrow(new RuntimeException("DB down"));
+
+        mockMvc.perform(get("/api/teacher/students"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(content().string("An unexpected error occurred."));
+
+        verify(userRepository).findAllByRole(Role.ROLE_STUDENT);
     }
 
     @Test

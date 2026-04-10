@@ -25,6 +25,15 @@ export type StopSessionsResult = {
   allSuccessful: boolean;
 };
 
+/** Mirrors backend {@code ActiveLabSessionResponse} (GET /api/teacher/sessions). */
+export type ActiveLabSessionResponse = {
+  studentId: string;
+  assignedCore: number;
+  assignedPort: number;
+  /** ISO-like string from server, e.g. {@code yyyy-MM-dd'T'HH:mm:ss} */
+  startTime: string;
+};
+
 /** Mirrors backend {@code LabSession} JSON (start endpoint). */
 export type LabSessionResponse = {
   studentId: string;
@@ -82,6 +91,15 @@ async function teacherFetch(path: string, init?: RequestInit): Promise<Response>
 export async function getServerCapacity(): Promise<ServerCapacityResponse> {
   const res = await teacherFetch("/api/teacher/server-capacity", { method: "GET" });
   return res.json() as Promise<ServerCapacityResponse>;
+}
+
+/**
+ * GET /api/teacher/sessions
+ * 200 with a JSON array (possibly empty). Same rows as considered by stop-all, read-only.
+ */
+export async function listActiveSessions(): Promise<ActiveLabSessionResponse[]> {
+  const res = await teacherFetch("/api/teacher/sessions", { method: "GET" });
+  return res.json() as Promise<ActiveLabSessionResponse[]>;
 }
 
 /**
