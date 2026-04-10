@@ -25,6 +25,12 @@ export type StopSessionsResult = {
   allSuccessful: boolean;
 };
 
+/** Mirrors backend {@code TeacherStudentResponse} (GET /api/teacher/students). */
+export type TeacherStudentResponse = {
+  studentId: string;
+  displayName: string;
+};
+
 /** Mirrors backend {@code ActiveLabSessionResponse} (GET /api/teacher/sessions). */
 export type ActiveLabSessionResponse = {
   studentId: string;
@@ -100,6 +106,15 @@ export async function getServerCapacity(): Promise<ServerCapacityResponse> {
 export async function listActiveSessions(): Promise<ActiveLabSessionResponse[]> {
   const res = await teacherFetch("/api/teacher/sessions", { method: "GET" });
   return res.json() as Promise<ActiveLabSessionResponse[]>;
+}
+
+/**
+ * GET /api/teacher/students
+ * Registered students (roster). Join with {@link listActiveSessions} for running vs stopped.
+ */
+export async function listTeacherStudents(): Promise<TeacherStudentResponse[]> {
+  const res = await teacherFetch("/api/teacher/students", { method: "GET" });
+  return res.json() as Promise<TeacherStudentResponse[]>;
 }
 
 /**
