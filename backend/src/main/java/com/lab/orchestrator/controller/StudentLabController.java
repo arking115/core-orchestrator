@@ -1,7 +1,7 @@
 package com.lab.orchestrator.controller;
 
-import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.model.User;
+import com.lab.orchestrator.dto.ActiveLabSessionResponse;
 import com.lab.orchestrator.exception.InvalidStudentIdException;
 import com.lab.orchestrator.repository.UserRepository;
 import com.lab.orchestrator.service.LabSessionService;
@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,9 +23,21 @@ public class StudentLabController {
     private final LabSessionService labSessionService;
     private final UserRepository userRepository;
 
+    @GetMapping("/session")
+    public ResponseEntity<ActiveLabSessionResponse> getSession() {
+        return labSessionService
+                .getActiveSession(getAuthenticatedStudentId())
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
     @PostMapping("/start")
-    public LabSession start() {
-        return labSessionService.startSession(getAuthenticatedStudentId());
+    public ActiveLabSessionResponse start() {
+        String studentId = getAuthenticatedStudentId();
+        labSessionService.startSession(studentId);
+        return labSessionService
+                .getActiveSession(studentId)
+                .orElseThrow(() -> new IllegalStateException("Started session not found for student: " + studentId));
     }
 
     @PostMapping("/stop")

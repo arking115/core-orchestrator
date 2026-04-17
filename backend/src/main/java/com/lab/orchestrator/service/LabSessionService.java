@@ -8,6 +8,7 @@ import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.repository.LabSessionRepository;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.regex.Pattern;
 import lombok.extern.slf4j.Slf4j;
@@ -88,6 +89,19 @@ public class LabSessionService {
                                         session.getAssignedPort(),
                                         session.getStartTime()))
                 .toList();
+    }
+
+    public Optional<ActiveLabSessionResponse> getActiveSession(String studentId) {
+        validateStudentId(studentId);
+        return labSessionRepository
+                .findById(studentId)
+                .map(
+                        session ->
+                                new ActiveLabSessionResponse(
+                                        session.getStudentId(),
+                                        session.getAssignedCore(),
+                                        session.getAssignedPort(),
+                                        session.getStartTime()));
     }
 
     public StopSessionsResult stopAllActiveSessions() {

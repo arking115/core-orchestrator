@@ -6,11 +6,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.lab.orchestrator.dto.ActiveLabSessionResponse;
 import com.lab.orchestrator.exception.GlobalExceptionHandler;
 import com.lab.orchestrator.exception.InvalidStudentIdException;
 import com.lab.orchestrator.model.LabSession;
@@ -79,6 +81,14 @@ class StudentLabControllerTest {
         session.setStartTime(LocalDateTime.of(2025, 3, 5, 10, 0, 0));
 
         when(labSessionService.startSession(eq("student123"))).thenReturn(session);
+        when(labSessionService.getActiveSession(eq("student123")))
+                .thenReturn(
+                        Optional.of(
+                                new ActiveLabSessionResponse(
+                                        "student123",
+                                        1,
+                                        30005,
+                                        LocalDateTime.of(2025, 3, 5, 10, 0, 0))));
 
         mockMvc.perform(post("/api/student/start").contentType(APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -88,6 +98,42 @@ class StudentLabControllerTest {
                 .andExpect(jsonPath("$.startTime").value("2025-03-05T10:00:00"));
 
         verify(labSessionService).startSession("student123");
+        verify(labSessionService).getActiveSession("student123");
+    }
+
+    @Test
+    @DisplayName("GET /api/student/session when active session exists returns 200 OK and session JSON")
+    void getSession_whenActive_returns200AndSessionDetails() throws Exception {
+        when(userRepository.findByUsername("student@school.ro")).thenReturn(Optional.of(studentUser()));
+        when(labSessionService.getActiveSession(eq("student123")))
+                .thenReturn(
+                        Optional.of(
+                                new ActiveLabSessionResponse(
+                                        "student123",
+                                        2,
+                                        30010,
+                                        LocalDateTime.of(2025, 3, 5, 11, 0, 0))));
+
+        mockMvc.perform(get("/api/student/session").accept(APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.studentId").value("student123"))
+                .andExpect(jsonPath("$.assignedPort").value(30010))
+                .andExpect(jsonPath("$.assignedCore").value(2))
+                .andExpect(jsonPath("$.startTime").value("2025-03-05T11:00:00"));
+
+        verify(labSessionService).getActiveSession("student123");
+    }
+
+    @Test
+    @DisplayName("GET /api/student/session when no active session exists returns 204 No Content")
+    void getSession_whenNotActive_returns204() throws Exception {
+        when(userRepository.findByUsername("student@school.ro")).thenReturn(Optional.of(studentUser()));
+        when(labSessionService.getActiveSession(eq("student123"))).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/student/session").accept(APPLICATION_JSON))
+                .andExpect(status().isNoContent());
+
+        verify(labSessionService).getActiveSession("student123");
     }
 
     @Test
