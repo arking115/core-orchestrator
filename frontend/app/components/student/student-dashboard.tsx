@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   IconActivity,
@@ -8,6 +8,16 @@ import {
   IconLogOut,
   IconShield,
 } from "~/components/auth/icons";
+import {
+  getStudentSession,
+  isStudentLabApiError,
+  startStudentSession,
+  stopStudentSession,
+  type ActiveLabSessionResponse,
+} from "~/lib/student-lab-api";
+
+const SSH_HOST = (import.meta.env.VITE_SSH_HOST as string | undefined) ?? "localhost";
+const SSH_USER = (import.meta.env.VITE_SSH_USER as string | undefined) ?? "student";
 
 const cardClass =
   "rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-950";
@@ -27,6 +37,11 @@ type StudentDashboardProps = {
   onSwitchToAdmin?: () => void;
 };
 
+type Feedback =
+  | { kind: "success"; message: string }
+  | { kind: "error"; message: string }
+  | { kind: "warning"; message: string };
+
 export function StudentDashboard({
   username,
   roleLabel,
@@ -37,12 +52,47 @@ export function StudentDashboard({
   const [status, setStatus] = useState<StudentLabStatus>("stopped");
   const [sshCommand, setSshCommand] = useState("");
   const [copied, setCopied] = useState(false);
+  const [session, setSession] = useState<ActiveLabSessionResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<"start" | "stop" | "refresh" | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const timersRef = useRef<number[]>([]);
 
   function clearTimers() {
     for (const id of timersRef.current) window.clearTimeout(id);
     timersRef.current = [];
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setFeedback(null);
+    getStudentSession()
+      .then((sess) => {
+        if (cancelled) return;
+        setSession(sess);
+        if (sess) {
+          setStatus("running");
+          setSshCommand(`ssh ${SSH_USER}@${SSH_HOST} -p ${sess.assignedPort}`);
+        } else {
+          setStatus("stopped");
+          setSshCommand("");
+        }
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setFeedback({ kind: "error", message: formatApiError(e) });
+        setSession(null);
+        setStatus("stopped");
+        setSshCommand("");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [username]);
 
   const statusBadge = useMemo(() => {
     if (status === "running") {
@@ -69,6 +119,9 @@ export function StudentDashboard({
   const canStart = status === "stopped";
   const canStop = status === "running";
 
+  const startDisabled = loading || busy !== null || !canStart;
+  const stopDisabled = loading || busy !== null || !canStop;
+
   async function handleCopy() {
     if (!sshCommand) return;
     try {
@@ -82,26 +135,46 @@ export function StudentDashboard({
     }
   }
 
-  function handleStartLab() {
-    if (!canStart) return;
+  async function handleStartLab() {
+    if (startDisabled) return;
     clearTimers();
     setCopied(false);
-    setSshCommand("");
+    setFeedback(null);
     setStatus("starting");
-    const t = window.setTimeout(() => {
-      const port = 30000 + Math.floor(Math.random() * 1000);
-      const command = `ssh ${username}@student.utcluj.com -p ${port}`;
-      setSshCommand(command);
+    setBusy("start");
+    try {
+      const sess = await startStudentSession();
+      setSession(sess);
+      setSshCommand(`ssh ${SSH_USER}@${SSH_HOST} -p ${sess.assignedPort}`);
       setStatus("running");
-    }, 5000);
-    timersRef.current.push(t);
+      setFeedback({ kind: "success", message: "Lab instance started successfully." });
+    } catch (e) {
+      setSession(null);
+      setStatus("stopped");
+      setSshCommand("");
+      setFeedback({ kind: "error", message: formatApiError(e) });
+    } finally {
+      setBusy(null);
+    }
   }
 
-  function handleStopLab() {
+  async function handleStopLab() {
+    if (stopDisabled) return;
     clearTimers();
-    setStatus("stopped");
-    setSshCommand("");
     setCopied(false);
+    setFeedback(null);
+    setBusy("stop");
+    try {
+      await stopStudentSession();
+      setSession(null);
+      setStatus("stopped");
+      setSshCommand("");
+      setFeedback({ kind: "success", message: "Lab instance stopped." });
+    } catch (e) {
+      setFeedback({ kind: "error", message: formatApiError(e) });
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
@@ -140,6 +213,21 @@ export function StudentDashboard({
       </header>
 
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">
+        {feedback ? (
+          <p
+            role={feedback.kind === "error" ? "alert" : "status"}
+            className={`rounded-lg border px-4 py-3 text-sm ${
+              feedback.kind === "success"
+                ? "border-green-200 bg-green-50 text-green-900 dark:border-green-900/50 dark:bg-green-950/40 dark:text-green-100"
+                : feedback.kind === "warning"
+                  ? "border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
+                  : "border-red-200 bg-red-50 text-red-900 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-100"
+            }`}
+          >
+            {feedback.message}
+          </p>
+        ) : null}
+
         <section className={cardClass} aria-labelledby="student-lab-heading">
           <div className="border-b border-slate-100 px-6 pb-4 pt-6 dark:border-slate-800">
             <div className="flex flex-wrap items-center justify-between gap-4">
@@ -150,6 +238,25 @@ export function StudentDashboard({
                 <p className="text-sm text-slate-600 dark:text-slate-400">
                   Manage your personal real-time Ubuntu environment
                 </p>
+                {loading ? (
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Loading session…</p>
+                ) : session ? (
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                    Assigned core{" "}
+                    <span className="font-medium text-slate-800 dark:text-slate-200">
+                      {session.assignedCore}
+                    </span>
+                    , port{" "}
+                    <span className="font-medium text-slate-800 dark:text-slate-200">
+                      {session.assignedPort}
+                    </span>
+                    .
+                  </p>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                    No active lab session yet.
+                  </p>
+                )}
               </div>
               <span
                 className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${statusBadge.className}`}
@@ -175,10 +282,11 @@ export function StudentDashboard({
                 <button
                   type="button"
                   className={`${primaryButtonClass} px-8 py-3 text-base`}
-                  onClick={handleStartLab}
+                  onClick={() => void handleStartLab()}
+                  disabled={startDisabled}
                 >
                   <PowerIcon className="h-4 w-4" aria-hidden />
-                  Start lab
+                  {busy === "start" ? "Starting…" : "Start lab"}
                 </button>
               </div>
             ) : null}
@@ -230,6 +338,7 @@ export function StudentDashboard({
                       className={`${outlineButtonClass} h-[52px] w-[52px] p-0`}
                       onClick={handleCopy}
                       aria-label="Copy SSH command"
+                      disabled={!sshCommand || loading || busy !== null}
                     >
                       {copied ? (
                         <CheckIcon className="h-4 w-4 text-green-700 dark:text-green-300" aria-hidden />
@@ -255,9 +364,14 @@ export function StudentDashboard({
                 </div>
 
                 <div className="flex justify-end">
-                  <button type="button" className={outlineButtonClass} onClick={handleStopLab}>
+                  <button
+                    type="button"
+                    className={outlineButtonClass}
+                    onClick={() => void handleStopLab()}
+                    disabled={stopDisabled}
+                  >
                     <PowerOffIcon className="h-4 w-4" aria-hidden />
-                    Stop lab
+                    {busy === "stop" ? "Stopping…" : "Stop lab"}
                   </button>
                 </div>
               </div>
@@ -377,5 +491,17 @@ function PowerOffIcon({ className }: { className?: string }) {
       <line x1="2" y1="2" x2="22" y2="22" />
     </svg>
   );
+}
+
+function formatApiError(e: unknown): string {
+  if (isStudentLabApiError(e)) {
+    if (e.status === 401) return "Your session expired or is missing. Please sign in again.";
+    if (e.status === 403) return "You are not allowed to perform this action.";
+    if (e.status === 204) return "No active session.";
+    if (e.status >= 500) return e.message || "Server error.";
+    return e.message || "Request failed.";
+  }
+  if (e instanceof Error) return e.message;
+  return "Something went wrong.";
 }
 
