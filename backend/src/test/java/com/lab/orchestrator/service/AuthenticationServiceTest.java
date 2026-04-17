@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.lab.orchestrator.dto.AuthenticationRequest;
 import com.lab.orchestrator.dto.AuthenticationResponse;
 import com.lab.orchestrator.dto.RegisterRequest;
+import com.lab.orchestrator.exception.InvalidStudentIdException;
 import com.lab.orchestrator.model.Role;
 import com.lab.orchestrator.model.User;
 import com.lab.orchestrator.repository.UserRepository;
@@ -140,7 +141,7 @@ class AuthenticationServiceTest {
 
         when(userRepository.existsByUsername("newuser")).thenReturn(false);
 
-        assertThrows(IllegalArgumentException.class, () -> authenticationService.register(request));
+        assertThrows(InvalidStudentIdException.class, () -> authenticationService.register(request));
 
         verify(userRepository, never()).existsByStudentId(any());
         verify(userRepository, never()).save(any());

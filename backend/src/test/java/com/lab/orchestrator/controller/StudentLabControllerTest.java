@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.lab.orchestrator.exception.GlobalExceptionHandler;
+import com.lab.orchestrator.exception.InvalidStudentIdException;
 import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.model.Role;
 import com.lab.orchestrator.model.User;
@@ -145,7 +146,7 @@ class StudentLabControllerTest {
 
         mockMvc.perform(post("/api/student/start").contentType(APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
-                .andExpect(content().string("Invalid studentId"));
+                .andExpect(content().string("studentId is missing for authenticated student"));
 
         verifyNoInteractions(labSessionService);
     }

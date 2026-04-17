@@ -2,6 +2,7 @@ package com.lab.orchestrator.service;
 
 import com.lab.orchestrator.dto.ActiveLabSessionResponse;
 import com.lab.orchestrator.dto.StopSessionsResult;
+import com.lab.orchestrator.exception.InvalidStudentIdException;
 import com.lab.orchestrator.model.CoreAllocation;
 import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.repository.LabSessionRepository;
@@ -127,14 +128,14 @@ public class LabSessionService {
 
     private void validateStudentId(String studentId) {
         if (studentId == null || studentId.isBlank()) {
-            throw new IllegalArgumentException("studentId must not be null or blank");
+            throw new InvalidStudentIdException("studentId must not be null or blank");
         }
         if (studentId.length() > MAX_STUDENT_ID_LENGTH) {
-            throw new IllegalArgumentException(
+            throw new InvalidStudentIdException(
                     "studentId must not exceed " + MAX_STUDENT_ID_LENGTH + " characters");
         }
         if (!VALID_STUDENT_ID_PATTERN.matcher(studentId).matches()) {
-            throw new IllegalArgumentException(
+            throw new InvalidStudentIdException(
                     "studentId must start with alphanumeric and contain only alphanumeric, underscore, or hyphen characters");
         }
     }

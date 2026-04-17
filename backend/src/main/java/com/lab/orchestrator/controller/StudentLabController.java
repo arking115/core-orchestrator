@@ -2,6 +2,7 @@ package com.lab.orchestrator.controller;
 
 import com.lab.orchestrator.model.LabSession;
 import com.lab.orchestrator.model.User;
+import com.lab.orchestrator.exception.InvalidStudentIdException;
 import com.lab.orchestrator.repository.UserRepository;
 import com.lab.orchestrator.service.LabSessionService;
 import lombok.RequiredArgsConstructor;
@@ -43,7 +44,7 @@ public class StudentLabController {
                         .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
 
         if (user.getStudentId() == null || user.getStudentId().isBlank()) {
-            throw new IllegalArgumentException("Invalid studentId");
+            throw new InvalidStudentIdException("studentId is missing for authenticated student");
         }
 
         return user.getStudentId();

@@ -3,6 +3,7 @@ package com.lab.orchestrator.service;
 import com.lab.orchestrator.dto.AuthenticationRequest;
 import com.lab.orchestrator.dto.AuthenticationResponse;
 import com.lab.orchestrator.dto.RegisterRequest;
+import com.lab.orchestrator.exception.InvalidStudentIdException;
 import com.lab.orchestrator.model.Role;
 import com.lab.orchestrator.model.User;
 import com.lab.orchestrator.repository.UserRepository;
@@ -84,10 +85,12 @@ public class AuthenticationService {
             throw new IllegalArgumentException("StudentId is required for student accounts");
         }
         if (studentId.length() < STUDENT_ID_MIN_LEN || studentId.length() > STUDENT_ID_MAX_LEN) {
-            throw new IllegalArgumentException("Invalid studentId");
+            throw new InvalidStudentIdException(
+                    "studentId must be between " + STUDENT_ID_MIN_LEN + " and " + STUDENT_ID_MAX_LEN + " characters");
         }
         if (!STUDENT_ID_PATTERN.matcher(studentId).matches()) {
-            throw new IllegalArgumentException("Invalid studentId");
+            throw new InvalidStudentIdException(
+                    "studentId may contain lowercase letters, digits, and hyphens (no leading/trailing hyphen)");
         }
     }
 }
