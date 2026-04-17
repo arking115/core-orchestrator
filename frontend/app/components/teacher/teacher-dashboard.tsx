@@ -352,14 +352,6 @@ export function TeacherDashboard({ username, onSignOut }: TeacherDashboardProps)
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              className={outlineButtonClass}
-              onClick={() => navigate("/student")}
-            >
-              <IconUser className="h-4 w-4" aria-hidden />
-              Student view
-            </button>
             <button type="button" className={outlineButtonClass} onClick={onSignOut}>
               <IconLogOut className="h-4 w-4" aria-hidden />
               Sign out
