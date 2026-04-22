@@ -26,12 +26,14 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(
+        // Allow local dev + same-LAN access (e.g. students connecting to a teacher's laptop IP).
+        // Spring supports wildcards via allowedOriginPatterns (allowedOrigins does not).
+        configuration.setAllowedOriginPatterns(
                 List.of(
-                        "http://localhost:5173",
-                        "http://127.0.0.1:5173",
-                        "http://localhost:5174",
-                        "http://127.0.0.1:5174"));
+                        "http://localhost:*",
+                        "http://127.0.0.1:*",
+                        "http://192.168.*.*:*",
+                        "http://10.*.*.*:*"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(false);

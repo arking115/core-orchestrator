@@ -52,6 +52,11 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        # Baked into the frontend bundle at build time.
+        # Used for the Student "ssh ..." command display.
+        VITE_SSH_HOST: ${VITE_SSH_HOST:-${SSH_HOST}}
+        VITE_SSH_USER: ${VITE_SSH_USER:-student}
     environment:
       PORT: "5173"
     depends_on:

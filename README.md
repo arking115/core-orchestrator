@@ -79,6 +79,10 @@ docker compose -f compose.prod.yaml down -v
   - Example: `10.0.0.15` or `lab-server.example.com`
 - `SSH_USERNAME`: **SSH username on the remote machine** (the user that owns `~/.ssh/authorized_keys` you updated).
   - Example: `ubuntu`, `admin`, `labuser`
+- `VITE_SSH_HOST`: **Hostname/IP shown to students in the UI** for the `ssh ...` command.
+  - Defaults to `SSH_HOST` if not set.
+- `VITE_SSH_USER`: **Username shown to students in the UI** for the `ssh ...` command.
+  - Default: `student`
 - `SSH_KEY_PATH`: **Path to the private key inside the backend container**.
   - You usually do not set this manually in prod; `compose.prod.yaml` sets it to `/run/secrets/ssh_private_key`.
 - `STORAGE_BASE_PATH`: **Base directory on the remote machine** where per-student data folders are created.
