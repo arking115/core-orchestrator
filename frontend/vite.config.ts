@@ -8,7 +8,9 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://localhost:8081",
+        // In Docker Compose, the backend is reachable by service name.
+        // Locally (no Docker), this falls back to your normal localhost setup.
+        target: process.env.VITE_API_PROXY_TARGET ?? "http://localhost:8081",
         changeOrigin: true,
       },
     },

@@ -1,0 +1,11 @@
+FROM maven:3.9-eclipse-temurin-17
+
+WORKDIR /app
+
+# Cache dependencies first (works best when building without bind-mounts)
+COPY pom.xml /app/pom.xml
+RUN mvn -q -DskipTests dependency:go-offline
+
+# Source is typically bind-mounted in compose for live dev.
+CMD ["mvn", "-DskipTests", "spring-boot:run"]
+

@@ -1,0 +1,66 @@
+name: core-orchestrator
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: orchestrator
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d orchestrator"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+      - maven_repo:/root/.m2
+      # Optional: make your host SSH keys available to the container (read-only).
+      # If you don't need SSH-based features, you can remove these two lines.
+      - ~/.ssh:/root/.ssh:ro
+    environment:
+      # Backend port
+      SERVER_PORT: "8081"
+      # Point Spring at the Compose postgres service (NOT localhost)
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orchestrator
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      # Override host-specific absolute path from application.properties
+      SSH_KEY_PATH: /root/.ssh/id_rsa
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8081:8081"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+      # Prevent the bind-mount from hiding node_modules installed in the image
+      - frontend_node_modules:/app/node_modules
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8081
+    depends_on:
+      - backend
+    ports:
+      - "5173:5173"
+
+volumes:
+  postgres_data:
+  maven_repo:
+  frontend_node_modules:
+

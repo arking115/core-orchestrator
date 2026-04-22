@@ -29,14 +29,7 @@ public class CommandExecutionService {
             throw new IllegalArgumentException("Command must not be null or blank");
         }
 
-        List<String> sshCommand = List.of(
-                "ssh",
-                "-i", keyPath,
-                "-o", "StrictHostKeyChecking=no",
-                username + "@" + host,
-                command
-        );
-
+        List<String> sshCommand = buildSshCommand(command);
         log.info("Executing SSH command: {}", String.join(" ", sshCommand));
 
         ProcessBuilder processBuilder = new ProcessBuilder(sshCommand);
@@ -68,5 +61,15 @@ public class CommandExecutionService {
         } catch (IOException e) {
             throw new RuntimeException("Failed to execute SSH command", e);
         }
+    }
+
+    private List<String> buildSshCommand(String remoteCommand) {
+        return List.of(
+                "ssh",
+                "-i", keyPath,
+                "-o", "StrictHostKeyChecking=no",
+                username + "@" + host,
+                remoteCommand
+        );
     }
 }

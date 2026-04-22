@@ -14,3 +14,5 @@ target/
 Thumbs.db
 
 .env
+secrets/
+compose.prod.dbeaver.yaml

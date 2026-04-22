@@ -1,6 +1,6 @@
 /**
  * Base URL for the Spring API. Empty string = same origin (use Vite dev proxy for `/api`).
- * Override in production with `VITE_API_BASE_URL` if the UI is served from another host.
+ * Override with `VITE_API_BASE_URL` if the UI is served from another host.
  */
 const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
 
