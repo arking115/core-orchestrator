@@ -1,4 +1,4 @@
-name: core-orchestrator
+name: core-orchestrator-dev
 
 services:
   postgres:
@@ -25,17 +25,12 @@ services:
     volumes:
       - ./backend:/app
       - maven_repo:/root/.m2
-      # Optional: make your host SSH keys available to the container (read-only).
-      # If you don't need SSH-based features, you can remove these two lines.
       - ~/.ssh:/root/.ssh:ro
     environment:
-      # Backend port
       SERVER_PORT: "8081"
-      # Point Spring at the Compose postgres service (NOT localhost)
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/orchestrator
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
-      # Override host-specific absolute path from application.properties
       SSH_KEY_PATH: /root/.ssh/id_rsa
     depends_on:
       postgres:
@@ -50,10 +45,12 @@ services:
     working_dir: /app
     volumes:
       - ./frontend:/app
-      # Prevent the bind-mount from hiding node_modules installed in the image
       - frontend_node_modules:/app/node_modules
     environment:
       VITE_API_PROXY_TARGET: http://backend:8081
+      # Optional. When set, the Teacher Panel shows a "Open Server Health (SigNoz)" button.
+      # Provide this via a local .env file (gitignored) or your shell env.
+      VITE_SIGNOZ_SERVER_HEALTH_URL: ${VITE_SIGNOZ_SERVER_HEALTH_URL:-}
     depends_on:
       - backend
     ports:

@@ -44,6 +44,9 @@ const smDangerButtonClass =
 
 const FALLBACK_CORE_DISPLAY = 16;
 
+const SIGNOZ_SERVER_HEALTH_URL = (import.meta as any).env
+  ?.VITE_SIGNOZ_SERVER_HEALTH_URL as string | undefined;
+
 /** One row in the teacher table: roster entry plus optional active session. */
 type TeacherSessionRow = {
   studentId: string;
@@ -352,6 +355,17 @@ export function TeacherDashboard({ username, onSignOut }: TeacherDashboardProps)
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {SIGNOZ_SERVER_HEALTH_URL ? (
+              <a
+                className={outlineButtonClass}
+                href={SIGNOZ_SERVER_HEALTH_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <IconActivity className="h-4 w-4" aria-hidden />
+                Open Server Health (SigNoz)
+              </a>
+            ) : null}
             <button type="button" className={outlineButtonClass} onClick={onSignOut}>
               <IconLogOut className="h-4 w-4" aria-hidden />
               Sign out
@@ -731,41 +745,15 @@ export function TeacherDashboard({ username, onSignOut }: TeacherDashboardProps)
               </div>
             </div>
 
-            <div className={cardClass}>
-              <div className="border-b border-slate-100 px-6 pb-4 pt-6 dark:border-slate-800">
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">
-                  Real-time server monitoring
-                </h2>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Live CPU core utilization (SigNoz or equivalent)
-                </p>
-              </div>
-              <div className="px-6 py-6">
-                <div className="flex aspect-video items-center justify-center overflow-hidden rounded-lg border border-slate-700 bg-slate-900">
-                  <div className="max-w-sm px-6 text-center">
-                    <IconActivity className="mx-auto mb-3 h-10 w-10 text-slate-500" aria-hidden />
-                    <p className="text-sm font-medium text-slate-200">Monitoring preview</p>
-                    <p className="mt-2 text-xs leading-relaxed text-slate-400">
-                      SigNoz (or similar) is not wired yet. You can embed a dashboard URL here later
-                      (for example{" "}
-                      <code className="rounded bg-slate-800 px-1 py-0.5 text-slate-200">
-                        localhost:3301
-                      </code>
-                      ).
-                    </p>
-                  </div>
-                </div>
-                <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
-                  Watch CPU load on assigned cores as students start their lab instances. Each active
-                  student will use their dedicated core.
-                </p>
-                {capacityMessage && !capacityReliable ? (
-                  <p className="mt-2 text-xs text-amber-800 dark:text-amber-200">
+            {capacityMessage && !capacityReliable ? (
+              <div className={cardClass}>
+                <div className="px-6 py-6">
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
                     Capacity note: {capacityMessage}
                   </p>
-                ) : null}
+                </div>
               </div>
-            </div>
+            ) : null}
           </section>
         )}
       </main>

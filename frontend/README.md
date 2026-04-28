@@ -34,6 +34,19 @@ npm run dev
 
 Your application will be available at `http://localhost:5173`.
 
+### SigNoz dashboard link (Teacher Panel)
+
+The teacher dashboard has an **"Open Server Health (SigNoz)"** button that opens a SigNoz dashboard in a new tab.
+
+Configure the URL via `VITE_SIGNOZ_SERVER_HEALTH_URL`.
+
+- If you run the app via **Docker Compose**, set it in the repo root `.env` (copy from `../.env.example`).
+- If you run the frontend via `npm run dev`, set it in your shell before starting:
+
+```bash
+export VITE_SIGNOZ_SERVER_HEALTH_URL="https://<your-signoz-host>/dashboard/<your-dashboard-id>?relativeTime=30m"
+```
+
 ## Building for Production
 
 Create a production build:

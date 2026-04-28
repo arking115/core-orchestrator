@@ -89,6 +89,8 @@ docker compose -f compose.prod.yaml down -v
   - Example: `/srv/lab-data` or `/home/<user>/lab-data`
 - `STORAGE_CONTAINER_PATH`: **Path inside the student containers** where the storage is mounted.
   - Default: `/home/student`
+- `VITE_SIGNOZ_SERVER_HEALTH_URL`: **URL opened from the Teacher Panel** by the "Open Server Health (SigNoz)" button.
+  - Example: `https://<your-signoz-host>/dashboard/<your-dashboard-id>?relativeTime=30m`
 
 #### Common commands
 
