@@ -531,7 +531,7 @@ export function TeacherDashboard({ username, onSignOut }: TeacherDashboardProps)
                   onChange={(e) => setDockerImage(e.target.value)}
                 />
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  Name of the Docker image with real-time kernel to use
+                  Image for student containers — the real-time kernel is provided by the host
                 </p>
               </div>
 
@@ -566,7 +566,7 @@ export function TeacherDashboard({ username, onSignOut }: TeacherDashboardProps)
             </div>
           </section>
         ) : (
-          <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <section className="space-y-6">
             <div className={cardClass}>
               <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 px-6 pb-4 pt-6 dark:border-slate-800">
                 <div>

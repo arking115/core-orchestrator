@@ -110,7 +110,7 @@ export function StudentDashboard({
       };
     }
     return {
-      label: "Not started",
+      label: "Stopped",
       className:
         "border-slate-200 bg-slate-100 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300",
     };
@@ -358,7 +358,6 @@ export function StudentDashboard({
                     <li>Copy the SSH command above</li>
                     <li>Open your local terminal application</li>
                     <li>Paste the command and press Enter</li>
-                    <li>Enter your password when prompted</li>
                     <li>When finished, click “Stop lab” below to shut down your instance</li>
                   </ol>
                 </div>
